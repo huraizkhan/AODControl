@@ -678,7 +678,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
     private Button button(String label) {
         Button b = new Button(this);
         b.setText(label);
-        b.setTextAllCaps(false);
+        b.setAllCaps(false);
         b.setTextColor(TEXT);
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(CARD_ALT);
