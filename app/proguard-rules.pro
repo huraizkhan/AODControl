@@ -1,0 +1,2 @@
+-keep class com.huraiz.aodcontrol.AodShellUserService { *; }
+-keep class com.huraiz.aodcontrol.** extends android.os.Binder { *; }
