@@ -1,143 +1,64 @@
 # AODControl
 
-A lightweight Android app for controlling Always-On Display visibility, screen-off dimming, and under-display fingerprint-triggered AOD visibility using **Shizuku**. No root is required.
+A lightweight Android app for controlling Always-On Display (AOD) opacity and screen-off fingerprint behavior through Shizuku.
 
-> **Status:** first public test release. The screen-off path uses standard Android broadcasts. UDFPS touch triggering uses the ADB-shell-readable touchscreen event stream and therefore depends on the device/OEM allowing `getevent` to the shell identity.
+## v1.1.0
 
-## Modes
+AODControl has a **default phone state** plus optional automatic modes.
 
-A fresh install starts with **no mode selected**. A **Restore system AOD defaults** action removes only AODControl's scrim override and returns the AOD enable setting to the system default.
+### Default phone state
+Choose one:
 
-### 1. Always-on Fingerprint
+- **System default** — removes AODControl's dimming override and restores the captured system AOD/UDFPS settings.
+- **AOFP** — enables AOD, requests screen-off UDFPS where supported, and makes the AOD fully black.
+- **Manual opacity** — enables AOD and applies a custom 0–100% dimming scrim.
 
-- Enables AOD/doze.
-- Applies a fully opaque AOD dimming scrim (`255`).
-- The display appears black while AOD remains technically active.
-- On devices that support screen-off UDFPS authentication, fingerprint unlock can continue to work.
-- **No app background service runs.**
+### Optional modes
+Each mode can be independently enabled. Every enabled mode can use **System default**, **AOFP**, or its own **Manual opacity**.
 
-### 2. Manual AOD Opacity
+- **Night mode** — editable start/end time, default 7:00 PM → 6:00 AM.
+- **Navigation mode** — choose installed navigation/ride apps. The mode activates while a selected app is in the foreground.
+- **Outdoor hours** — editable daytime schedule, default 8:00 AM → 6:00 PM.
+- **Charging mode** — activates while plugged in / charging / full.
 
-- Enables AOD/doze.
-- Provides a `0–100%` opacity slider.
-- `0%` = normal AOD visibility.
-- `100%` = fully black AOD.
-- **No app background service runs.**
+Priority when several modes are active:
 
-### 3. Smart Dimming
+`Charging → Navigation → Outdoor → Night → Default`
 
-Runs a low-activity foreground service only while this mode is selected.
+Automatic modes use a low-priority foreground service only while at least one mode is enabled. With all modes disabled, there is no background service.
 
-Controls:
+## Requirements
 
-- **AOD visible time:** 1–60 seconds.
-- **Dimming start delay:** 1 second up to the selected visible time.
-- **Opacity mode:**
-  - **Auto:** starts with the device/SystemUI AOD ambient brightness and scrim behavior, then fades toward black.
-  - **Manual:** choose start and end opacity.
-- **Use same settings for Screen Off & Fingerprint:**
-  - Checked: one shared profile.
-  - Unchecked: separate Screen Off and Fingerprint profiles.
+- Android 8.0+ (`minSdk 26`)
+- Shizuku v11+
+- A device/SystemUI implementation that honors `always_on_display_constants` / `dimming_scrim_array`
+- Screen-off fingerprint support depends on the device/OEM implementation
 
-Example: `Visible = 20 s`, `Delay = 10 s` means the normal/start AOD state is held for 10 seconds, then it fades during seconds 10–20 and reaches its final opacity at 20 seconds.
+No root is required when Shizuku is started through Wireless Debugging/ADB.
 
-## Fingerprint trigger
+## Privacy / security
 
-Smart Dimming includes a one-time **UDFPS area calibration**.
+- No internet permission.
+- No fingerprint templates or biometric authentication data are accessed.
+- Navigation mode only checks the foreground package name through the restricted Shizuku UserService.
+- The Shizuku service exposes only the settings operations and foreground-app query used by AODControl; it is not a general shell bridge.
 
-The calibration stores only normalized screen coordinates and an approximate detection radius. It does **not** read fingerprint templates, biometric matching data, or authentication results.
+## Build
 
-While the screen is non-interactive/AOD:
+GitHub Actions builds a debug APK on every push to `main` / `master`.
 
-1. Shizuku's shell identity watches the touchscreen input event stream with `/system/bin/getevent`.
-2. A touch inside the calibrated UDFPS area triggers the Fingerprint dimming profile.
-3. A registered fingerprint is still authenticated entirely by Android/SystemUI and unlocks normally.
-4. An unregistered fingerprint leaves the device locked; AOD follows the configured timer and returns to the final opacity.
-5. Another touch restarts the timer.
-
-If the OEM blocks shell access to touchscreen events, the app reports the fingerprint trigger as unavailable. **Screen-off Smart Dimming still works.** Side/rear fingerprint sensors are not currently detected by this input-coordinate method.
-
-## Auto opacity behavior
-
-AODControl does not implement its own light-sensor brightness algorithm.
-
-At the beginning of an Auto trigger it removes only the `dimming_scrim_array` override from `always_on_display_constants`, allowing SystemUI to use the device's normal AOD brightness/scrim resources. When the fade begins, AODControl reads the device's overlaid `config_doze_brightness_sensor_to_scrim_opacity` resource when available and progressively moves its buckets toward `255` (black).
-
-This leaves the normal AOD brightness curve under Android/SystemUI control.
-
-## Shizuku
-
-The app uses Shizuku's **UserService** API. On a non-rooted phone, Shizuku provides ADB shell identity after it has been started through Wireless Debugging/ADB.
-
-The privileged UserService is intentionally restricted. It exposes only:
-
-- `secure/doze_always_on`
-- `global/always_on_display_constants`
-- AOD scrim resource lookup
-- Read-only touchscreen event monitoring for calibrated UDFPS triggering
-
-There is no general arbitrary-shell-command interface exposed by AODControl.
-
-## Compatibility
-
-- Minimum Android version: **Android 8.0 (API 26)**.
-- Shizuku v11+ required; current Shizuku is recommended.
-- Core AOD controls require an AOSP-style SystemUI implementation that honors `always_on_display_constants` / `dimming_scrim_array`.
-- Screen-off Smart Dimming is the most portable trigger.
-- UDFPS Smart Dimming requires a touchscreen device readable by ADB shell and calibration.
-- Devices without AOD can install the app, but AOD functions naturally cannot work.
-
-OEMs heavily customize AOD and fingerprint behavior, so compatibility reports are welcome.
-
-## Building
-
-### GitHub Actions
-
-Every push to `main` or `master` runs `.github/workflows/android.yml` and uploads:
-
-`AODControl-debug` → `app-debug.apk`
-
-Open the repository's **Actions** tab, open the latest successful **Android Build**, and download the artifact.
-
-### Android Studio
-
-Open the repository root as an Android Studio project and build the `app` module.
-
-### Command line
-
-The project uses Android Gradle Plugin 8.7.3, Gradle 8.9, JDK 17, and compile/target SDK 35.
+Locally:
 
 ```bash
-./gradlew :app:assembleDebug
+gradle :app:assembleDebug
 ```
 
-If `gradle-wrapper.jar` is not present yet, the included launcher downloads the official Gradle 8.9 wrapper JAR on first command-line use.
+The APK is written to:
 
-## Initial Termux push
-
-Assuming this GitHub repository already exists and is empty:
-
-```bash
-cd ~
-git clone https://github.com/huraizkhan/AODControl.git
+```text
+app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Extract the provided source archive **into `~`**, so its top-level `AODControl` folder merges with the cloned repository, then:
+## Notes
 
-```bash
-cd ~/AODControl
-git add .
-git commit -m "Initial AODControl release"
-git push origin main
-```
-
-## Important notes
-
-- Smart Dimming uses a foreground service and therefore has an ongoing notification while active.
-- Manual AOD Opacity and Always-on Fingerprint do not run a background service.
-- Non-root Shizuku availability depends on Shizuku being started. The app reconnects when its binder becomes available.
-- This app does not bypass Android biometric authentication. It only changes AOD visibility and observes touchscreen coordinates around a user-calibrated UDFPS area.
-
-## License
-
-MIT
+Some SystemUI implementations cache AOD opacity while an AOD session is already active. In that case a newly selected mode is guaranteed in settings immediately, while the visible AOD may refresh on the next AOD entry (for example the next lock/wake cycle).

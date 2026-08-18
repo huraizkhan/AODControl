@@ -3,102 +3,243 @@ package com.huraiz.aodcontrol;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-public final class AppPrefs {
-    public static final int MODE_NONE = 0;
-    public static final int MODE_ALWAYS_FINGERPRINT = 1;
-    public static final int MODE_MANUAL = 2;
-    public static final int MODE_SMART = 3;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 
-    public static final String PROFILE_SHARED = "shared";
-    public static final String PROFILE_SCREEN = "screen";
-    public static final String PROFILE_FINGERPRINT = "fingerprint";
+public final class AppPrefs {
+    public static final int BEHAVIOR_SYSTEM = 0;
+    public static final int BEHAVIOR_AOFP = 1;
+    public static final int BEHAVIOR_MANUAL = 2;
+
+    public static final String MODE_NIGHT = "night";
+    public static final String MODE_NAVIGATION = "navigation";
+    public static final String MODE_OUTDOOR = "outdoor";
+    public static final String MODE_CHARGING = "charging";
 
     private static final String PREFS = "aod_control_prefs";
-    private static final String KEY_MODE = "mode";
-    private static final String KEY_MANUAL_OPACITY = "manual_opacity";
-    private static final String KEY_SAME_SETTINGS = "same_trigger_settings";
-    private static final String KEY_CALIBRATED = "fingerprint_calibrated";
-    private static final String KEY_FP_X = "fingerprint_x";
-    private static final String KEY_FP_Y = "fingerprint_y";
-    private static final String KEY_FP_RX = "fingerprint_rx";
-    private static final String KEY_FP_RY = "fingerprint_ry";
+    private static final String KEY_DEFAULT_BEHAVIOR = "default_behavior";
+    private static final String KEY_DEFAULT_OPACITY = "default_opacity";
+    private static final String KEY_NAV_PACKAGES = "navigation_packages";
+    private static final String KEY_LAST_REASON = "last_reason";
+    private static final String KEY_LAST_STATE = "last_state";
+    private static final String KEY_LAST_OK = "last_ok";
+
+    private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
+    private static final String KEY_ORIGINAL_DOZE = "original_doze";
+    private static final String KEY_ORIGINAL_UDFPS = "original_udfps";
+    private static final String KEY_ORIGINAL_DIMMING = "original_dimming";
+    private static final String NULL = "__AODCONTROL_NULL__";
 
     private AppPrefs() {}
 
-    public static SharedPreferences prefs(Context context) {
+    private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
-    public static int getMode(Context context) {
-        return prefs(context).getInt(KEY_MODE, MODE_NONE);
-    }
-
-    public static void setMode(Context context, int mode) {
-        prefs(context).edit().putInt(KEY_MODE, mode).apply();
-    }
-
-    public static int getManualOpacity(Context context) {
-        return DimmingProfile.clamp(prefs(context).getInt(KEY_MANUAL_OPACITY, 255), 0, 255);
-    }
-
-    public static void setManualOpacity(Context context, int raw) {
-        prefs(context).edit().putInt(KEY_MANUAL_OPACITY, DimmingProfile.clamp(raw, 0, 255)).apply();
-    }
-
-    public static boolean useSameTriggerSettings(Context context) {
-        return prefs(context).getBoolean(KEY_SAME_SETTINGS, true);
-    }
-
-    public static void setUseSameTriggerSettings(Context context, boolean same) {
-        prefs(context).edit().putBoolean(KEY_SAME_SETTINGS, same).apply();
-    }
-
-    public static DimmingProfile getProfile(Context context, String prefix) {
+    public static int getDefaultBehavior(Context context) {
         SharedPreferences p = prefs(context);
-        int visible = p.getInt(prefix + "_visible", 20);
-        int delay = p.getInt(prefix + "_delay", 10);
-        boolean auto = p.getBoolean(prefix + "_auto", true);
-        int start = p.getInt(prefix + "_start", 0);
-        int end = p.getInt(prefix + "_end", 255);
-        return new DimmingProfile(visible, delay, auto, start, end);
-    }
-
-    public static void saveProfile(Context context, String prefix, DimmingProfile profile) {
-        profile = profile.copy();
-        prefs(context).edit()
-                .putInt(prefix + "_visible", profile.visibleSeconds)
-                .putInt(prefix + "_delay", profile.delaySeconds)
-                .putBoolean(prefix + "_auto", profile.autoOpacity)
-                .putInt(prefix + "_start", profile.startOpacity)
-                .putInt(prefix + "_end", profile.endOpacity)
-                .apply();
-    }
-
-    public static DimmingProfile profileForTrigger(Context context, boolean fingerprint) {
-        if (useSameTriggerSettings(context)) {
-            return getProfile(context, PROFILE_SHARED);
+        if (!p.contains(KEY_DEFAULT_BEHAVIOR) && p.contains("mode")) {
+            int oldMode = p.getInt("mode", 0);
+            int migrated = oldMode == 2 ? BEHAVIOR_MANUAL
+                    : (oldMode == 1 || oldMode == 3 ? BEHAVIOR_AOFP : BEHAVIOR_SYSTEM);
+            p.edit().putInt(KEY_DEFAULT_BEHAVIOR, migrated).apply();
+            return migrated;
         }
-        return getProfile(context, fingerprint ? PROFILE_FINGERPRINT : PROFILE_SCREEN);
+        return sanitizeBehavior(p.getInt(KEY_DEFAULT_BEHAVIOR, BEHAVIOR_SYSTEM));
     }
 
-    public static boolean isFingerprintCalibrated(Context context) {
-        return prefs(context).getBoolean(KEY_CALIBRATED, false);
+    public static void setDefaultBehavior(Context context, int behavior) {
+        prefs(context).edit().putInt(KEY_DEFAULT_BEHAVIOR, sanitizeBehavior(behavior)).apply();
     }
 
-    public static void saveFingerprintCalibration(Context context, float x, float y, float rx, float ry) {
+    public static int getDefaultOpacity(Context context) {
+        SharedPreferences p = prefs(context);
+        if (!p.contains(KEY_DEFAULT_OPACITY) && p.contains("manual_opacity")) {
+            int migrated = clamp(p.getInt("manual_opacity", 255), 0, 255);
+            p.edit().putInt(KEY_DEFAULT_OPACITY, migrated).apply();
+            return migrated;
+        }
+        return clamp(p.getInt(KEY_DEFAULT_OPACITY, 255), 0, 255);
+    }
+
+    public static void setDefaultOpacity(Context context, int raw) {
+        prefs(context).edit().putInt(KEY_DEFAULT_OPACITY, clamp(raw, 0, 255)).apply();
+    }
+
+    public static boolean isModeEnabled(Context context, String mode) {
+        return prefs(context).getBoolean(mode + "_enabled", false);
+    }
+
+    public static void setModeEnabled(Context context, String mode, boolean enabled) {
+        prefs(context).edit().putBoolean(mode + "_enabled", enabled).apply();
+    }
+
+    public static int getModeBehavior(Context context, String mode) {
+        return sanitizeBehavior(prefs(context).getInt(mode + "_behavior", BEHAVIOR_SYSTEM));
+    }
+
+    public static void setModeBehavior(Context context, String mode, int behavior) {
+        prefs(context).edit().putInt(mode + "_behavior", sanitizeBehavior(behavior)).apply();
+    }
+
+    public static int getModeOpacity(Context context, String mode) {
+        return clamp(prefs(context).getInt(mode + "_opacity", 255), 0, 255);
+    }
+
+    public static void setModeOpacity(Context context, String mode, int raw) {
+        prefs(context).edit().putInt(mode + "_opacity", clamp(raw, 0, 255)).apply();
+    }
+
+    public static int getStartMinutes(Context context, String mode) {
+        int fallback = MODE_NIGHT.equals(mode) ? 19 * 60 : 8 * 60;
+        return clamp(prefs(context).getInt(mode + "_start_minutes", fallback), 0, 1439);
+    }
+
+    public static int getEndMinutes(Context context, String mode) {
+        int fallback = MODE_NIGHT.equals(mode) ? 6 * 60 : 18 * 60;
+        return clamp(prefs(context).getInt(mode + "_end_minutes", fallback), 0, 1439);
+    }
+
+    public static void setTimeRange(Context context, String mode, int startMinutes, int endMinutes) {
         prefs(context).edit()
-                .putBoolean(KEY_CALIBRATED, true)
-                .putFloat(KEY_FP_X, clamp01(x))
-                .putFloat(KEY_FP_Y, clamp01(y))
-                .putFloat(KEY_FP_RX, Math.max(0.01f, Math.min(0.25f, rx)))
-                .putFloat(KEY_FP_RY, Math.max(0.01f, Math.min(0.25f, ry)))
+                .putInt(mode + "_start_minutes", clamp(startMinutes, 0, 1439))
+                .putInt(mode + "_end_minutes", clamp(endMinutes, 0, 1439))
                 .apply();
     }
 
-    public static float fingerprintX(Context context) { return prefs(context).getFloat(KEY_FP_X, 0.5f); }
-    public static float fingerprintY(Context context) { return prefs(context).getFloat(KEY_FP_Y, 0.82f); }
-    public static float fingerprintRadiusX(Context context) { return prefs(context).getFloat(KEY_FP_RX, 0.08f); }
-    public static float fingerprintRadiusY(Context context) { return prefs(context).getFloat(KEY_FP_RY, 0.04f); }
+    public static Set<String> getNavigationPackages(Context context) {
+        Set<String> stored = prefs(context).getStringSet(KEY_NAV_PACKAGES, Collections.emptySet());
+        return stored == null ? new HashSet<>() : new HashSet<>(stored);
+    }
 
-    private static float clamp01(float v) { return Math.max(0f, Math.min(1f, v)); }
+    public static void setNavigationPackages(Context context, Set<String> packages) {
+        prefs(context).edit().putStringSet(KEY_NAV_PACKAGES,
+                packages == null ? Collections.emptySet() : new HashSet<>(packages)).apply();
+    }
+
+
+    public static void disableAllModes(Context context) {
+        prefs(context).edit()
+                .putBoolean(MODE_NIGHT + "_enabled", false)
+                .putBoolean(MODE_NAVIGATION + "_enabled", false)
+                .putBoolean(MODE_OUTDOOR + "_enabled", false)
+                .putBoolean(MODE_CHARGING + "_enabled", false)
+                .apply();
+    }
+
+    public static boolean anyAutomationEnabled(Context context) {
+        return isModeEnabled(context, MODE_NIGHT)
+                || isModeEnabled(context, MODE_NAVIGATION)
+                || isModeEnabled(context, MODE_OUTDOOR)
+                || isModeEnabled(context, MODE_CHARGING);
+    }
+
+    public static Behavior getDefaultBehaviorConfig(Context context) {
+        return new Behavior(getDefaultBehavior(context), getDefaultOpacity(context));
+    }
+
+    public static Behavior getModeBehaviorConfig(Context context, String mode) {
+        return new Behavior(getModeBehavior(context, mode), getModeOpacity(context, mode));
+    }
+
+    public static void saveLastState(Context context, String reason, Behavior behavior, boolean ok) {
+        prefs(context).edit()
+                .putString(KEY_LAST_REASON, reason == null ? "Default" : reason)
+                .putString(KEY_LAST_STATE, describeBehavior(behavior))
+                .putBoolean(KEY_LAST_OK, ok)
+                .apply();
+    }
+
+    public static String getLastReason(Context context) {
+        return prefs(context).getString(KEY_LAST_REASON, "Default");
+    }
+
+    public static String getLastState(Context context) {
+        return prefs(context).getString(KEY_LAST_STATE, "System default");
+    }
+
+    public static boolean getLastOk(Context context) {
+        return prefs(context).getBoolean(KEY_LAST_OK, true);
+    }
+
+    public static boolean hasOriginalBaseline(Context context) {
+        return prefs(context).getBoolean(KEY_ORIGINAL_CAPTURED, false);
+    }
+
+    public static synchronized void saveOriginalBaseline(Context context, String doze, String udfps, String dimming) {
+        if (hasOriginalBaseline(context)) return;
+        prefs(context).edit()
+                .putBoolean(KEY_ORIGINAL_CAPTURED, true)
+                .putString(KEY_ORIGINAL_DOZE, encodeNullable(doze))
+                .putString(KEY_ORIGINAL_UDFPS, encodeNullable(udfps))
+                .putString(KEY_ORIGINAL_DIMMING, encodeNullable(dimming))
+                .commit();
+    }
+
+    public static String getOriginalDoze(Context context) {
+        return decodeNullable(prefs(context).getString(KEY_ORIGINAL_DOZE, NULL));
+    }
+
+    public static String getOriginalUdfps(Context context) {
+        return decodeNullable(prefs(context).getString(KEY_ORIGINAL_UDFPS, NULL));
+    }
+
+    public static String getOriginalDimming(Context context) {
+        return decodeNullable(prefs(context).getString(KEY_ORIGINAL_DIMMING, NULL));
+    }
+
+    public static void clearOriginalBaseline(Context context) {
+        prefs(context).edit()
+                .remove(KEY_ORIGINAL_CAPTURED)
+                .remove(KEY_ORIGINAL_DOZE)
+                .remove(KEY_ORIGINAL_UDFPS)
+                .remove(KEY_ORIGINAL_DIMMING)
+                .apply();
+    }
+
+    public static String describeBehavior(Behavior behavior) {
+        if (behavior == null || behavior.type == BEHAVIOR_SYSTEM) return "System default";
+        if (behavior.type == BEHAVIOR_AOFP) return "AOFP • AOD blank";
+        return "Manual opacity • " + Math.round(behavior.opacity * 100f / 255f) + "%";
+    }
+
+    private static int sanitizeBehavior(int value) {
+        if (value == BEHAVIOR_AOFP || value == BEHAVIOR_MANUAL) return value;
+        return BEHAVIOR_SYSTEM;
+    }
+
+    private static String encodeNullable(String value) {
+        return value == null ? NULL : value;
+    }
+
+    private static String decodeNullable(String value) {
+        return value == null || NULL.equals(value) ? null : value;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    public static final class Behavior {
+        public final int type;
+        public final int opacity;
+
+        public Behavior(int type, int opacity) {
+            this.type = sanitizeBehavior(type);
+            this.opacity = clamp(opacity, 0, 255);
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (!(other instanceof Behavior)) return false;
+            Behavior b = (Behavior) other;
+            return type == b.type && opacity == b.opacity;
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * type + opacity;
+        }
+    }
 }
