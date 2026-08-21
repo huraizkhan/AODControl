@@ -1,10 +1,10 @@
 <resources>
-    <color name="bg">#09090B</color>
-    <color name="surface">#18181B</color>
-    <color name="surface_alt">#27272A</color>
-    <color name="text_primary">#FAFAFA</color>
-    <color name="text_secondary">#A1A1AA</color>
-    <color name="accent">#8B5CF6</color>
-    <color name="good">#34D399</color>
-    <color name="warning">#FBBF24</color>
+    <color name="bg">#0B0D08</color>
+    <color name="surface">#12150E</color>
+    <color name="surface_alt">#1B1F16</color>
+    <color name="text_primary">#F1F2EA</color>
+    <color name="text_secondary">#A7AA9B</color>
+    <color name="accent">#CDD68A</color>
+    <color name="good">#95D5B2</color>
+    <color name="warning">#E0B86E</color>
 </resources>

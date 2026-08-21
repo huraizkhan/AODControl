@@ -8,6 +8,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class AppPrefs {
+    public static final int APPEARANCE_SYSTEM = 0;
+    public static final int APPEARANCE_LIGHT = 1;
+    public static final int APPEARANCE_DARK = 2;
+
     public static final int BEHAVIOR_SYSTEM = 0;
     public static final int BEHAVIOR_AOFP = 1;
     public static final int BEHAVIOR_MANUAL = 2;
@@ -24,6 +28,9 @@ public final class AppPrefs {
     private static final String KEY_LAST_REASON = "last_reason";
     private static final String KEY_LAST_STATE = "last_state";
     private static final String KEY_LAST_OK = "last_ok";
+    private static final String KEY_APPEARANCE = "appearance";
+    private static final String KEY_DYNAMIC_COLOR = "dynamic_color";
+    private static final String KEY_PURE_BLACK = "pure_black_theme";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -35,6 +42,34 @@ public final class AppPrefs {
 
     private static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+
+    public static int getAppearance(Context context) {
+        int value = prefs(context).getInt(KEY_APPEARANCE, APPEARANCE_DARK);
+        if (value == APPEARANCE_LIGHT || value == APPEARANCE_SYSTEM) return value;
+        return APPEARANCE_DARK;
+    }
+
+    public static void setAppearance(Context context, int appearance) {
+        if (appearance != APPEARANCE_SYSTEM && appearance != APPEARANCE_LIGHT) appearance = APPEARANCE_DARK;
+        prefs(context).edit().putInt(KEY_APPEARANCE, appearance).apply();
+    }
+
+    public static boolean isDynamicColorEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_DYNAMIC_COLOR, false);
+    }
+
+    public static void setDynamicColorEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_DYNAMIC_COLOR, enabled).apply();
+    }
+
+    public static boolean isPureBlackThemeEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_PURE_BLACK, false);
+    }
+
+    public static void setPureBlackThemeEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_PURE_BLACK, enabled).apply();
     }
 
     public static int getDefaultBehavior(Context context) {

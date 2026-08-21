@@ -2,9 +2,19 @@
 
 A lightweight Android app for controlling Always-On Display (AOD) opacity and screen-off fingerprint behavior through Shizuku.
 
-## v1.1.0
+## v1.2.0
 
 AODControl has a **default phone state** plus optional automatic modes.
+
+
+### Appearance
+
+AODControl now has an in-app appearance page:
+
+- **System / Light / Dark** appearance. Dark remains the default.
+- **Dynamic color** is optional and follows Android Material You colors on Android 12+.
+- With Dynamic color off, AODControl uses its own dark olive palette.
+- **Pure black theme** is optional for AMOLED-friendly dark backgrounds.
 
 ### Default phone state
 Choose one:

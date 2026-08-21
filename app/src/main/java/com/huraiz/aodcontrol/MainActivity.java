@@ -7,6 +7,7 @@ import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -18,13 +19,13 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.WindowInsets;
 import android.widget.Button;
-import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Switch;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -40,13 +41,18 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity implements ShizukuBridge.Listener {
-    private static final int BG = Color.rgb(9, 9, 11);
-    private static final int CARD = Color.rgb(24, 24, 27);
-    private static final int CARD_ALT = Color.rgb(39, 39, 42);
-    private static final int TEXT = Color.rgb(250, 250, 250);
-    private static final int MUTED = Color.rgb(161, 161, 170);
-    private static final int GOOD = Color.rgb(52, 211, 153);
-    private static final int WARN = Color.rgb(251, 191, 36);
+    private UiTheme.Palette colors;
+    private int BG;
+    private int CARD;
+    private int CARD_ALT;
+    private int TEXT;
+    private int MUTED;
+    private int GOOD;
+    private int WARN;
+    private int ACCENT;
+    private int ON_ACCENT;
+    private int DIVIDER;
+    private String themeSignature;
 
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -77,7 +83,11 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        UiTheme.applyActivityTheme(this);
         super.onCreate(savedInstanceState);
+        applyThemePalette();
+        themeSignature = UiTheme.signature(this);
+        UiTheme.applyWindow(this, colors);
         setContentView(buildUi());
         ShizukuBridge.addListener(this);
         refreshShizukuUi();
@@ -88,6 +98,10 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
     @Override
     protected void onResume() {
         super.onResume();
+        if (!UiTheme.signature(this).equals(themeSignature)) {
+            recreate();
+            return;
+        }
         refreshShizukuUi();
         refreshNavigationSummary();
         AutomationService.sync(this);
@@ -126,34 +140,25 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         applySystemBarInsets(scroll);
 
         LinearLayout root = vertical();
-        root.setPadding(dp(18), dp(22), dp(18), dp(34));
+        root.setPadding(dp(20), dp(18), dp(20), dp(34));
         scroll.addView(root, matchWrap());
 
-        TextView title = text("AOD Control", 30, TEXT, true);
+        TextView title = text("AODControl", 34, TEXT, false);
         root.addView(title);
-        TextView subtitle = text("Always-on fingerprint, custom AOD opacity and automatic modes through Shizuku.", 14, MUTED, false);
-        subtitle.setPadding(0, dp(5), 0, dp(16));
+        TextView subtitle = text("Ambient display control without root", 13, MUTED, false);
+        subtitle.setPadding(0, dp(4), 0, dp(24));
         root.addView(subtitle);
 
-        buildShizukuCard(root);
-        addGap(root, 12);
-        buildCurrentStateCard(root);
-        addGap(root, 14);
-
-        TextView defaultHeading = text("Default phone state", 13, MUTED, true);
-        defaultHeading.setPadding(dp(2), 0, 0, dp(8));
+        TextView defaultHeading = sectionHeading("▣  Default phone state");
         root.addView(defaultHeading);
-
         LinearLayout defaultCard = card(CARD);
         defaultEditor = new BehaviorEditor(defaultCard, null, true);
         root.addView(defaultCard, cardParams());
 
-        addGap(root, 16);
-        TextView modesHeading = text("Modes", 13, MUTED, true);
-        modesHeading.setPadding(dp(2), 0, 0, dp(3));
-        root.addView(modesHeading);
-        TextView modesHint = text("Enable only the modes you want. Active priority: Charging → Navigation → Outdoor → Night → Default.", 12, MUTED, false);
-        modesHint.setPadding(dp(2), 0, dp(2), dp(10));
+        addGap(root, 20);
+        root.addView(sectionHeading("◷  Automatic modes"));
+        TextView modesHint = text("Priority: Charging → Navigation → Outdoor → Night → Default", 12, MUTED, false);
+        modesHint.setPadding(dp(4), 0, dp(4), dp(10));
         root.addView(modesHint);
 
         nightMode = buildNightMode(root);
@@ -164,8 +169,22 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         addGap(root, 10);
         chargingMode = buildChargingMode(root);
 
-        TextView footer = text("Automatic modes run a lightweight foreground service only while at least one mode is enabled. Navigation mode watches the foreground app through the restricted Shizuku service; it does not read navigation content.", 12, MUTED, false);
-        footer.setPadding(dp(2), dp(12), dp(2), 0);
+        addGap(root, 20);
+        root.addView(sectionHeading("⌁  Current state"));
+        buildCurrentStateCard(root);
+
+        addGap(root, 20);
+        root.addView(sectionHeading("◇  Connection"));
+        buildShizukuCard(root);
+
+        addGap(root, 18);
+        Button advanced = primaryButton("⚙  Advanced settings");
+        advanced.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
+        root.addView(advanced, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
+
+        TextView footer = text("No automation service runs when every automatic mode is disabled.", 11, MUTED, false);
+        footer.setGravity(Gravity.CENTER_HORIZONTAL);
+        footer.setPadding(dp(8), dp(12), dp(8), 0);
         root.addView(footer);
 
         return scroll;
@@ -192,11 +211,10 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
 
     private void buildCurrentStateCard(LinearLayout root) {
         LinearLayout stateCard = card(CARD);
-        stateCard.addView(text("Current state", 13, MUTED, true));
         currentState = text("System default", 18, TEXT, true);
         currentState.setPadding(0, dp(5), 0, 0);
         stateCard.addView(currentState);
-        currentReason = text("Reason: Default", 13, MUTED, false);
+        currentReason = text("Active mode: Default", 13, MUTED, false);
         currentReason.setPadding(0, dp(4), 0, 0);
         stateCard.addView(currentReason);
         automationStatus = text("Automation stopped", 12, MUTED, false);
@@ -282,7 +300,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         boolean ok = AppPrefs.getLastOk(this);
         currentState.setText(state);
         currentState.setTextColor(ok ? TEXT : WARN);
-        currentReason.setText("Reason: " + reason);
+        currentReason.setText("Active mode: " + reason);
         if (AppPrefs.anyAutomationEnabled(this)) {
             automationStatus.setText(AutomationService.isRunning() ? "Automation running" : "Automation starting…");
             automationStatus.setTextColor(AutomationService.isRunning() ? GOOD : MUTED);
@@ -449,26 +467,33 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
 
     private final class ModeEditor {
         final String mode;
-        final CheckBox enabled;
+        final Switch enabled;
         final LinearLayout details;
         BehaviorEditor behaviorEditor;
 
         ModeEditor(LinearLayout host, String mode, String title, String description) {
             this.mode = mode;
-            enabled = new CheckBox(MainActivity.this);
-            enabled.setText(title);
-            enabled.setTextColor(TEXT);
-            enabled.setTextSize(17);
-            enabled.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
-            enabled.setChecked(AppPrefs.isModeEnabled(MainActivity.this, mode));
-            host.addView(enabled, matchWrap());
 
+            LinearLayout top = new LinearLayout(MainActivity.this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            top.setGravity(Gravity.CENTER_VERTICAL);
+
+            LinearLayout copy = vertical();
+            TextView titleView = text(title, 17, TEXT, false);
+            copy.addView(titleView);
             TextView desc = text(description, 12, MUTED, false);
-            desc.setPadding(dp(4), 0, 0, dp(5));
-            host.addView(desc);
+            desc.setPadding(0, dp(3), dp(10), 0);
+            copy.addView(desc);
+            top.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+            enabled = new Switch(MainActivity.this);
+            enabled.setChecked(AppPrefs.isModeEnabled(MainActivity.this, mode));
+            tintSwitch(enabled);
+            top.addView(enabled);
+            host.addView(top, matchWrap());
 
             details = vertical();
-            details.setPadding(dp(4), dp(5), dp(4), 0);
+            details.setPadding(dp(2), dp(10), dp(2), 0);
             host.addView(details, matchWrap());
             details.setVisibility(enabled.isChecked() ? View.VISIBLE : View.GONE);
 
@@ -500,18 +525,20 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
             this.mode = mode;
             this.isDefault = isDefault;
 
-            TextView label = text(isDefault ? "Behavior" : "When this mode is active", 13, MUTED, true);
-            label.setPadding(0, dp(3), 0, dp(4));
-            parent.addView(label);
+            if (!isDefault) {
+                TextView label = text("Active behavior", 12, MUTED, true);
+                label.setPadding(0, dp(2), 0, dp(5));
+                parent.addView(label);
+            }
 
             group = new RadioGroup(MainActivity.this);
             group.setOrientation(RadioGroup.VERTICAL);
-            system = behaviorRadio("System default");
-            aofp = behaviorRadio("AOFP • AOD blank");
-            manual = behaviorRadio("Manual opacity");
-            group.addView(system);
+            aofp = behaviorRadio("AOFP\nAOD active, visually black, fingerprint available");
+            manual = behaviorRadio("Manual opacity\nAdjust AOD darkness manually");
+            system = behaviorRadio("System default\nUse the phone's normal AOD behavior");
             group.addView(aofp);
             group.addView(manual);
+            group.addView(system);
             parent.addView(group, matchWrap());
 
             manualPanel = vertical();
@@ -520,6 +547,8 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
             manualPanel.addView(opacityValue);
             opacity = new SeekBar(MainActivity.this);
             opacity.setMax(100);
+            opacity.setProgressTintList(ColorStateList.valueOf(ACCENT));
+            opacity.setThumbTintList(ColorStateList.valueOf(ACCENT));
             manualPanel.addView(opacity, matchWrap());
             TextView hint = text("0% = normal AOD • 100% = completely black", 11, MUTED, false);
             hint.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -629,8 +658,53 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         radio.setText(label);
         radio.setTextColor(TEXT);
         radio.setTextSize(15);
-        radio.setPadding(0, dp(3), 0, dp(3));
+        radio.setLineSpacing(dp(2), 1f);
+        radio.setPadding(0, dp(6), 0, dp(6));
+        radio.setButtonTintList(new ColorStateList(
+                new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}},
+                new int[]{ACCENT, MUTED}));
         return radio;
+    }
+
+    private void applyThemePalette() {
+        colors = UiTheme.palette(this);
+        BG = colors.bg;
+        CARD = colors.surface;
+        CARD_ALT = colors.surfaceAlt;
+        TEXT = colors.text;
+        MUTED = colors.muted;
+        GOOD = colors.good;
+        WARN = colors.warning;
+        ACCENT = colors.accent;
+        ON_ACCENT = colors.onAccent;
+        DIVIDER = colors.divider;
+    }
+
+    private TextView sectionHeading(String value) {
+        TextView t = text(value, 15, ACCENT, true);
+        t.setPadding(dp(4), 0, 0, dp(10));
+        return t;
+    }
+
+    private void tintSwitch(Switch toggle) {
+        int[][] states = new int[][]{new int[]{android.R.attr.state_checked}, new int[]{}};
+        toggle.setThumbTintList(new ColorStateList(states, new int[]{ACCENT, MUTED}));
+        toggle.setTrackTintList(new ColorStateList(states,
+                new int[]{UiTheme.withAlpha(ACCENT, 125), UiTheme.withAlpha(MUTED, 80)}));
+    }
+
+    private Button primaryButton(String label) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(16);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setTextColor(ON_ACCENT);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(ACCENT);
+        bg.setCornerRadius(dp(28));
+        b.setBackground(bg);
+        return b;
     }
 
     private LinearLayout vertical() {
