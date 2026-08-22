@@ -77,6 +77,19 @@
                 android:value="User-enabled custom AOD fallback that waits for native AOD to end or for a device without native AOD to reach screen-off" />
         </service>
 
+        <service
+            android:name=".AodAccessibilityService"
+            android:exported="true"
+            android:label="AODControl lock-screen compatibility"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/aod_accessibility_service" />
+        </service>
+
         <receiver
             android:name=".BootReceiver"
             android:enabled="true"

@@ -47,6 +47,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
     private DisplayManager displayManager;
     private CustomAodOverlay customOverlay;
     private boolean usingOverlay;
+    private boolean usingAccessibilityOverlay;
 
     private final Runnable offCheck = this::maybeLaunchFallback;
 
@@ -151,6 +152,25 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
         if (keyguard != null && !keyguard.isKeyguardLocked()) return;
 
         launchInProgress = true;
+
+        // Preferred compatibility path on restrictive OEM keyguards. An enabled
+        // AccessibilityService owns TYPE_ACCESSIBILITY_OVERLAY, which Android treats
+        // as a trusted accessibility window and can remain above keyguard. It does
+        // not inspect accessibility events or screen content.
+        if (AodAccessibilityService.isConnected() && AodAccessibilityService.showAod()) {
+            launchInProgress = false;
+            usingOverlay = false;
+            usingAccessibilityOverlay = true;
+            customVisible = true;
+            wakeDisplay();
+            updateNotification("Custom AOD showing via lock-screen compatibility");
+            if (AppPrefs.getCustomAodMode(this) == AppPrefs.CUSTOM_AOD_TEMPORARY) {
+                main.postDelayed(this::finishTemporaryOverlay,
+                        AppPrefs.getCustomAodSeconds(this) * 1000L);
+            }
+            return;
+        }
+
         io.execute(() -> {
             boolean launchedByShell = false;
             IAodShellService shell = ShizukuBridge.getService();
@@ -198,6 +218,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
                 return;
             }
             usingOverlay = true;
+            usingAccessibilityOverlay = false;
             customVisible = true;
             wakeDisplay();
             updateNotification("Custom AOD overlay fallback showing");
@@ -221,8 +242,10 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
     }
 
     private void hideCustomAod() {
+        AodAccessibilityService.hideAod();
         if (customOverlay != null) customOverlay.hide();
         CustomAodActivity.finishVisible();
+        usingAccessibilityOverlay = false;
         usingOverlay = false;
         customVisible = false;
         launchInProgress = false;
@@ -281,7 +304,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
     }
 
     private static boolean shouldServiceRun(Context context) {
-        return AppPrefs.canRunUniversalAod(context) && hasOverlayPermission(context);
+        return AppPrefs.canRunUniversalAod(context);
     }
 
     public static void sync(Context context) {
@@ -299,13 +322,15 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
 
     public static String statusText(Context context) {
         if (!AppPrefs.isUniversalAodEnabled(context)) return "Disabled";
-        if (!hasOverlayPermission(context)) return "Needs Display over other apps permission";
         int tech = AppPrefs.getResolvedDisplayTechnology(context);
         if (tech != AppPrefs.DISPLAY_OLED && !AppPrefs.isLcdAodAllowed(context)) {
             return tech == AppPrefs.DISPLAY_LCD ? "LCD AOD is blocked for safety" : "Display type unknown • LCD permission required";
         }
-        if (tech == AppPrefs.DISPLAY_OLED) return "Ready • waits for native AOD to turn off";
-        return "Ready • LCD custom AOD allowed";
+        String access = AodAccessibilityService.isEnabled(context)
+                ? " • lock-screen compatibility enabled"
+                : (hasOverlayPermission(context) ? " • overlay fallback available" : "");
+        if (tech == AppPrefs.DISPLAY_OLED) return "Ready • waits for native AOD to turn off" + access;
+        return "Ready • LCD custom AOD allowed" + access;
     }
 
     private void createChannel() {

@@ -33,6 +33,7 @@ public class UniversalAodSettingsActivity extends Activity implements ShizukuBri
     private TextView engineStatus;
     private TextView durationValue;
     private TextView brightnessValue;
+    private TextView accessibilityStatus;
     private Switch universalSwitch;
     private Switch lcdSwitch;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -98,7 +99,6 @@ public class UniversalAodSettingsActivity extends Activity implements ShizukuBri
                 "Waits for native AOD first. Takes over only when the display actually reaches screen-off.",
                 AppPrefs.isUniversalAodEnabled(this), true, checked -> {
                     AppPrefs.setUniversalAodEnabled(this, checked);
-                    if (checked && !UniversalAodService.hasOverlayPermission(this)) openOverlayPermission();
                     UniversalAodService.sync(this);
                     refreshUiState();
                 }, sw -> universalSwitch = sw);
@@ -190,7 +190,22 @@ public class UniversalAodSettingsActivity extends Activity implements ShizukuBri
         LinearLayout access = card();
         root.addView(access, matchWrap());
 
-        TextView overlayExplain = text("Display over other apps lets AODControl safely start its custom lock-screen AOD from the background. Native AOFP controls still use Shizuku separately.", 13, colors.muted, false);
+        TextView accessibilityExplain = text("Lock-screen compatibility is the preferred fallback on phones that keep normal app windows behind the keyguard. AODControl does not read screen content or accessibility events.", 13, colors.muted, false);
+        accessibilityExplain.setPadding(dp(18), dp(15), dp(18), dp(8));
+        access.addView(accessibilityExplain);
+
+        accessibilityStatus = text("", 13, colors.accent, true);
+        accessibilityStatus.setPadding(dp(18), 0, dp(18), dp(9));
+        access.addView(accessibilityStatus);
+
+        Button accessibilityButton = button("Open Accessibility settings");
+        LinearLayout.LayoutParams accessibilityLp = matchWrap();
+        accessibilityLp.setMargins(dp(14), 0, dp(14), dp(14));
+        access.addView(accessibilityButton, accessibilityLp);
+        accessibilityButton.setOnClickListener(v -> openAccessibilitySettings());
+
+        addDivider(access);
+        TextView overlayExplain = text("Display over other apps remains a secondary fallback for less restrictive phones. Native AOFP controls still use Shizuku separately.", 13, colors.muted, false);
         overlayExplain.setPadding(dp(18), dp(15), dp(18), dp(10));
         access.addView(overlayExplain);
         Button overlayButton = button("Open Display over other apps");
@@ -234,6 +249,14 @@ public class UniversalAodSettingsActivity extends Activity implements ShizukuBri
             engineStatus.setText(status);
             engineStatus.setTextColor(status.startsWith("Ready") ? colors.good : colors.muted);
         }
+        if (accessibilityStatus != null) {
+            boolean enabled = AodAccessibilityService.isEnabled(this);
+            accessibilityStatus.setText(enabled
+                    ? (AodAccessibilityService.isConnected() ? "Enabled • connected" : "Enabled • connecting")
+                    : "Disabled");
+            accessibilityStatus.setTextColor(enabled ? colors.accent : colors.muted);
+        }
+
         if (detectedStatus != null) {
             int detected = AppPrefs.getDetectedDisplayTechnology(this);
             int resolved = AppPrefs.getResolvedDisplayTechnology(this);
@@ -360,6 +383,14 @@ public class UniversalAodSettingsActivity extends Activity implements ShizukuBri
         capture.capture(toggle);
         row.addView(toggle);
         parent.addView(row, matchWrap());
+    }
+
+    private void openAccessibilitySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        } catch (Throwable t) {
+            toast("Open Settings → Accessibility → AODControl lock-screen compatibility");
+        }
     }
 
     private void openOverlayPermission() {

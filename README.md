@@ -97,3 +97,7 @@ OEM lock screens and background-start policies vary. Universal AOD deliberately 
 
 ## v1.3.2 lock-screen compatibility
 Custom AOD now prefers a lock-screen Activity launched by the restricted Shizuku shell service, with the old application overlay kept as fallback.
+
+## Lock-screen compatibility fallback
+
+On OEMs that keep ordinary activities or app overlays behind the keyguard, Universal AOD can use the optional **AODControl lock-screen compatibility** Accessibility Service. It only creates a `TYPE_ACCESSIBILITY_OVERLAY` for the custom AOD and does not read accessibility events or window content.
