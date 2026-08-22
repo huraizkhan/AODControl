@@ -93,3 +93,7 @@ app/build/outputs/apk/debug/app-debug.apk
 ## Compatibility note
 
 OEM lock screens and background-start policies vary. Universal AOD deliberately uses capability/fallback behavior rather than assuming every manufacturer implements AOD the same way. The first physical-device testing phase should verify whether each OEM permits the custom lock-screen activity and reports native AOD as DOZE before its time limit expires.
+
+
+## v1.3.2 lock-screen compatibility
+Custom AOD now prefers a lock-screen Activity launched by the restricted Shizuku shell service, with the old application overlay kept as fallback.

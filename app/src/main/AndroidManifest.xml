@@ -43,8 +43,9 @@
         <activity
             android:name=".CustomAodActivity"
             android:excludeFromRecents="true"
-            android:exported="false"
+            android:exported="true"
             android:launchMode="singleTask"
+            android:permission="android.permission.DUMP"
             android:showWhenLocked="true"
             android:taskAffinity=""
             android:turnScreenOn="true" />

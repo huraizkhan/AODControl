@@ -115,6 +115,18 @@ public class AodShellUserService extends IAodShellService.Stub {
     }
 
     @Override
+    public String startCustomAod() {
+        // Launch through shell identity so Android background-activity restrictions do
+        // not prevent the user-enabled AOD screen from appearing over keyguard.
+        // The activity itself is protected by android.permission.DUMP, which shell
+        // holds but ordinary third-party applications do not.
+        return errorFrom(run(
+                "/system/bin/am", "start", "-W", "--user", "current",
+                "--activity-no-animation", "--activity-exclude-from-recents",
+                "-n", "com.huraiz.aodcontrol/.CustomAodActivity"));
+    }
+
+    @Override
     public void destroy() {
         System.exit(0);
     }

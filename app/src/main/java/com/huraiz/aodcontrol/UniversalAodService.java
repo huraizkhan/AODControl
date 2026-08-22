@@ -46,6 +46,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private DisplayManager displayManager;
     private CustomAodOverlay customOverlay;
+    private boolean usingOverlay;
 
     private final Runnable offCheck = this::maybeLaunchFallback;
 
@@ -150,30 +151,62 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
         if (keyguard != null && !keyguard.isKeyguardLocked()) return;
 
         launchInProgress = true;
-        try {
-            // Add AODControl's own overlay before waking the panel. This prevents
-            // the OEM lock screen from being the only visible layer after wake.
-            if (customOverlay == null) customOverlay = new CustomAodOverlay(this);
-            if (!customOverlay.show()) {
-                launchInProgress = false;
-                completedThisSleepCycle = true;
-                updateNotification("Custom AOD overlay could not start");
-                return;
+        io.execute(() -> {
+            boolean launchedByShell = false;
+            IAodShellService shell = ShizukuBridge.getService();
+            if (shell != null) {
+                try {
+                    String error = shell.startCustomAod();
+                    launchedByShell = error == null || error.isEmpty();
+                } catch (Throwable ignored) {}
             }
 
-            customVisible = true;
-            launchInProgress = false;
-            wakeDisplay();
-            updateNotification("Custom AOD showing");
+            final boolean shellStarted = launchedByShell;
+            main.post(() -> {
+                if (shellStarted) {
+                    // CustomAodActivity owns the clock, temporary timer and lock-screen
+                    // presentation. Give it a moment to report onCreate().
+                    usingOverlay = false;
+                    wakeDisplay();
+                    main.postDelayed(() -> {
+                        launchInProgress = false;
+                        if (customVisible) {
+                            updateNotification("Custom AOD showing on lock screen");
+                        } else {
+                            // Some OEMs may still reject the Activity. Retain the old
+                            // overlay as a best-effort fallback rather than waking to an
+                            // empty lock screen.
+                            showOverlayFallback();
+                        }
+                    }, 700L);
+                    return;
+                }
 
+                launchInProgress = false;
+                showOverlayFallback();
+            });
+        });
+    }
+
+    private void showOverlayFallback() {
+        if (completedThisSleepCycle || endingCustom || customVisible) return;
+        try {
+            if (customOverlay == null) customOverlay = new CustomAodOverlay(this);
+            if (!customOverlay.show()) {
+                completedThisSleepCycle = true;
+                updateNotification("Custom AOD could not start on lock screen");
+                return;
+            }
+            usingOverlay = true;
+            customVisible = true;
+            wakeDisplay();
+            updateNotification("Custom AOD overlay fallback showing");
             if (AppPrefs.getCustomAodMode(this) == AppPrefs.CUSTOM_AOD_TEMPORARY) {
                 main.postDelayed(this::finishTemporaryOverlay,
                         AppPrefs.getCustomAodSeconds(this) * 1000L);
             }
         } catch (Throwable t) {
-            launchInProgress = false;
             completedThisSleepCycle = true;
-            hideCustomAod();
             updateNotification("Custom AOD could not start");
         }
     }
@@ -189,6 +222,8 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
 
     private void hideCustomAod() {
         if (customOverlay != null) customOverlay.hide();
+        CustomAodActivity.finishVisible();
+        usingOverlay = false;
         customVisible = false;
         launchInProgress = false;
     }

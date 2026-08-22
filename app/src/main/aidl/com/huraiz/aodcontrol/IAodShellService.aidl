@@ -10,6 +10,7 @@ interface IAodShellService {
     String getForegroundPackage() = 7;
     String getDisplayPanelHints() = 8;
     String sleepScreen() = 9;
+    String startCustomAod() = 10;
 
     void destroy() = 16777114;
 }
