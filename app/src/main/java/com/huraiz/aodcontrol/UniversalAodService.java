@@ -16,6 +16,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.provider.Settings;
 import android.view.Display;
 
@@ -44,6 +45,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private DisplayManager displayManager;
+    private CustomAodOverlay customOverlay;
 
     private final Runnable offCheck = this::maybeLaunchFallback;
 
@@ -63,16 +65,14 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
                 if (customVisible) {
                     // Power button while our AOD is showing means "turn it fully off".
                     completedThisSleepCycle = true;
-                    CustomAodActivity.finishVisible();
-                    customVisible = false;
+                    hideCustomAod();
                     return;
                 }
                 completedThisSleepCycle = false;
                 scheduleOffCheck(700L);
             } else if (Intent.ACTION_USER_PRESENT.equals(action)) {
                 completedThisSleepCycle = true;
-                CustomAodActivity.finishVisible();
-                customVisible = false;
+                hideCustomAod();
             }
         }
     };
@@ -82,6 +82,8 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
         running = true;
         createChannel();
         startForeground(NOTIFICATION_ID, notification("Universal AOD ready"));
+
+        customOverlay = new CustomAodOverlay(this);
 
         displayManager = (DisplayManager) getSystemService(Context.DISPLAY_SERVICE);
         if (displayManager != null) displayManager.registerDisplayListener(this, main);
@@ -113,8 +115,7 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
         if (displayManager != null) {
             try { displayManager.unregisterDisplayListener(this); } catch (Throwable ignored) {}
         }
-        CustomAodActivity.finishVisible();
-        customVisible = false;
+        hideCustomAod();
         launchInProgress = false;
         io.shutdownNow();
         super.onDestroy();
@@ -150,23 +151,64 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
 
         launchInProgress = true;
         try {
-            Intent open = new Intent(this, CustomAodActivity.class)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK
-                            | Intent.FLAG_ACTIVITY_NO_ANIMATION
-                            | Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS);
-            startActivity(open);
-            main.postDelayed(() -> {
-                if (!customVisible) {
-                    launchInProgress = false;
-                    // Avoid a launch loop on an OEM that blocks background lock-screen activities.
-                    completedThisSleepCycle = true;
-                    updateNotification("Custom AOD launch blocked by system");
-                }
-            }, 2500L);
+            // Add AODControl's own overlay before waking the panel. This prevents
+            // the OEM lock screen from being the only visible layer after wake.
+            if (customOverlay == null) customOverlay = new CustomAodOverlay(this);
+            if (!customOverlay.show()) {
+                launchInProgress = false;
+                completedThisSleepCycle = true;
+                updateNotification("Custom AOD overlay could not start");
+                return;
+            }
+
+            customVisible = true;
+            launchInProgress = false;
+            wakeDisplay();
+            updateNotification("Custom AOD showing");
+
+            if (AppPrefs.getCustomAodMode(this) == AppPrefs.CUSTOM_AOD_TEMPORARY) {
+                main.postDelayed(this::finishTemporaryOverlay,
+                        AppPrefs.getCustomAodSeconds(this) * 1000L);
+            }
         } catch (Throwable t) {
             launchInProgress = false;
             completedThisSleepCycle = true;
+            hideCustomAod();
             updateNotification("Custom AOD could not start");
+        }
+    }
+
+    private void finishTemporaryOverlay() {
+        if (!customVisible || completedThisSleepCycle) return;
+        completedThisSleepCycle = true;
+        endingCustom = true;
+        hideCustomAod();
+        requestSleep(this);
+        main.postDelayed(() -> endingCustom = false, 1200L);
+    }
+
+    private void hideCustomAod() {
+        if (customOverlay != null) customOverlay.hide();
+        customVisible = false;
+        launchInProgress = false;
+    }
+
+    @SuppressWarnings("deprecation")
+    private void wakeDisplay() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        if (pm == null) return;
+        PowerManager.WakeLock wakeLock = null;
+        try {
+            wakeLock = pm.newWakeLock(
+                    PowerManager.FULL_WAKE_LOCK
+                            | PowerManager.ACQUIRE_CAUSES_WAKEUP
+                            | PowerManager.ON_AFTER_RELEASE,
+                    "AODControl:custom-aod-wake");
+            wakeLock.acquire(1200L);
+        } catch (Throwable ignored) {
+            if (wakeLock != null && wakeLock.isHeld()) {
+                try { wakeLock.release(); } catch (Throwable ignored2) {}
+            }
         }
     }
 
@@ -217,7 +259,6 @@ public class UniversalAodService extends Service implements DisplayManager.Displ
             } catch (Throwable ignored) {}
         } else {
             try { app.stopService(new Intent(app, UniversalAodService.class)); } catch (Throwable ignored) {}
-            CustomAodActivity.finishVisible();
         }
     }
 

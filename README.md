@@ -72,6 +72,10 @@ Display technology can be set to **Auto / OLED / LCD**. Auto uses read-only pane
 - Navigation mode checks only the foreground package name.
 - The Shizuku UserService is restricted; it does not expose a general arbitrary-shell interface.
 
+### Universal AOD custom layout
+
+When the Universal AOD fallback takes over, AODControl now draws its own full-screen black overlay rather than only waking the OEM lock screen. The first layout includes clock, date, battery percentage and burn-in position shifting. More layout styles and notification content can be added independently later.
+
 ## Build
 
 GitHub Actions builds a debug APK on every push to `main` / `master`.
