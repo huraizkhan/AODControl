@@ -16,6 +16,14 @@ public final class AppPrefs {
     public static final int BEHAVIOR_AOFP = 1;
     public static final int BEHAVIOR_MANUAL = 2;
 
+    public static final int DISPLAY_AUTO = 0;
+    public static final int DISPLAY_OLED = 1;
+    public static final int DISPLAY_LCD = 2;
+    public static final int DISPLAY_UNKNOWN = 3;
+
+    public static final int CUSTOM_AOD_TEMPORARY = 0;
+    public static final int CUSTOM_AOD_CONTINUOUS = 1;
+
     public static final String MODE_NIGHT = "night";
     public static final String MODE_NAVIGATION = "navigation";
     public static final String MODE_OUTDOOR = "outdoor";
@@ -31,6 +39,13 @@ public final class AppPrefs {
     private static final String KEY_APPEARANCE = "appearance";
     private static final String KEY_DYNAMIC_COLOR = "dynamic_color";
     private static final String KEY_PURE_BLACK = "pure_black_theme";
+    private static final String KEY_UNIVERSAL_AOD = "universal_aod_enabled";
+    private static final String KEY_DISPLAY_TECH = "display_tech_override";
+    private static final String KEY_DETECTED_DISPLAY_TECH = "detected_display_tech";
+    private static final String KEY_ALLOW_LCD_AOD = "allow_lcd_aod";
+    private static final String KEY_CUSTOM_AOD_MODE = "custom_aod_mode";
+    private static final String KEY_CUSTOM_AOD_SECONDS = "custom_aod_seconds";
+    private static final String KEY_CUSTOM_AOD_BRIGHTNESS = "custom_aod_brightness";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -70,6 +85,89 @@ public final class AppPrefs {
 
     public static void setPureBlackThemeEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_PURE_BLACK, enabled).apply();
+    }
+
+    public static boolean isUniversalAodEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_UNIVERSAL_AOD, false);
+    }
+
+    public static void setUniversalAodEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_UNIVERSAL_AOD, enabled).apply();
+    }
+
+    public static int getDisplayTechnology(Context context) {
+        int value = prefs(context).getInt(KEY_DISPLAY_TECH, DISPLAY_AUTO);
+        if (value == DISPLAY_OLED || value == DISPLAY_LCD) return value;
+        return DISPLAY_AUTO;
+    }
+
+    public static void setDisplayTechnology(Context context, int value) {
+        if (value != DISPLAY_OLED && value != DISPLAY_LCD) value = DISPLAY_AUTO;
+        prefs(context).edit().putInt(KEY_DISPLAY_TECH, value).apply();
+    }
+
+    public static int getDetectedDisplayTechnology(Context context) {
+        int value = prefs(context).getInt(KEY_DETECTED_DISPLAY_TECH, DISPLAY_UNKNOWN);
+        if (value == DISPLAY_OLED || value == DISPLAY_LCD) return value;
+        return DISPLAY_UNKNOWN;
+    }
+
+    public static void setDetectedDisplayTechnology(Context context, int value) {
+        if (value != DISPLAY_OLED && value != DISPLAY_LCD) value = DISPLAY_UNKNOWN;
+        prefs(context).edit().putInt(KEY_DETECTED_DISPLAY_TECH, value).apply();
+    }
+
+    public static int getResolvedDisplayTechnology(Context context) {
+        int override = getDisplayTechnology(context);
+        return override == DISPLAY_AUTO ? getDetectedDisplayTechnology(context) : override;
+    }
+
+    public static boolean isLcdAodAllowed(Context context) {
+        return prefs(context).getBoolean(KEY_ALLOW_LCD_AOD, false);
+    }
+
+    public static void setLcdAodAllowed(Context context, boolean allowed) {
+        prefs(context).edit().putBoolean(KEY_ALLOW_LCD_AOD, allowed).apply();
+    }
+
+    public static int getCustomAodMode(Context context) {
+        return prefs(context).getInt(KEY_CUSTOM_AOD_MODE, CUSTOM_AOD_TEMPORARY) == CUSTOM_AOD_CONTINUOUS
+                ? CUSTOM_AOD_CONTINUOUS : CUSTOM_AOD_TEMPORARY;
+    }
+
+    public static void setCustomAodMode(Context context, int mode) {
+        prefs(context).edit().putInt(KEY_CUSTOM_AOD_MODE,
+                mode == CUSTOM_AOD_CONTINUOUS ? CUSTOM_AOD_CONTINUOUS : CUSTOM_AOD_TEMPORARY).apply();
+    }
+
+    public static int getCustomAodSeconds(Context context) {
+        return clamp(prefs(context).getInt(KEY_CUSTOM_AOD_SECONDS, 10), 5, 60);
+    }
+
+    public static void setCustomAodSeconds(Context context, int seconds) {
+        prefs(context).edit().putInt(KEY_CUSTOM_AOD_SECONDS, clamp(seconds, 5, 60)).apply();
+    }
+
+    public static int getCustomAodBrightness(Context context) {
+        return clamp(prefs(context).getInt(KEY_CUSTOM_AOD_BRIGHTNESS, 3), 1, 20);
+    }
+
+    public static void setCustomAodBrightness(Context context, int percent) {
+        prefs(context).edit().putInt(KEY_CUSTOM_AOD_BRIGHTNESS, clamp(percent, 1, 20)).apply();
+    }
+
+    public static boolean canRunUniversalAod(Context context) {
+        if (!isUniversalAodEnabled(context)) return false;
+        int technology = getResolvedDisplayTechnology(context);
+        if (technology == DISPLAY_OLED) return true;
+        return isLcdAodAllowed(context);
+    }
+
+    public static String displayTechnologyLabel(int technology) {
+        if (technology == DISPLAY_OLED) return "OLED / AMOLED";
+        if (technology == DISPLAY_LCD) return "LCD";
+        if (technology == DISPLAY_AUTO) return "Auto";
+        return "Unknown";
     }
 
     public static int getDefaultBehavior(Context context) {

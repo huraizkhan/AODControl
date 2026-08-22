@@ -92,6 +92,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         ShizukuBridge.addListener(this);
         refreshShizukuUi();
         AutomationService.sync(this);
+        UniversalAodService.sync(this);
         if (!AppPrefs.anyAutomationEnabled(this)) applyDefaultNow();
     }
 
@@ -105,6 +106,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         refreshShizukuUi();
         refreshNavigationSummary();
         AutomationService.sync(this);
+        UniversalAodService.sync(this);
         ui.removeCallbacks(statusTicker);
         ui.post(statusTicker);
     }

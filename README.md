@@ -1,74 +1,91 @@
 # AODControl
 
-A lightweight Android app for controlling Always-On Display (AOD) opacity and screen-off fingerprint behavior through Shizuku.
+A lightweight Android app for native AOD opacity/AOFP control plus an optional Universal AOD fallback. Uses Shizuku for restricted system-setting operations; no root required.
 
-## v1.2.0
+## v1.3.0
 
-AODControl has a **default phone state** plus optional automatic modes.
+### Native AOD controls
 
+The existing working engine is unchanged:
 
-### Appearance
+- **System default** — remove AODControl's dimming override and restore the captured system AOD/UDFPS settings.
+- **AOFP** — keep native AOD/Doze active, make the AOD visually black, and preserve screen-off fingerprint where the device supports it.
+- **Manual opacity** — native AOD with a custom 0–100% dimming scrim.
 
-AODControl now has an in-app appearance page:
-
-- **System / Light / Dark** appearance. Dark remains the default.
-- **Dynamic color** is optional and follows Android Material You colors on Android 12+.
-- With Dynamic color off, AODControl uses its own dark olive palette.
-- **Pure black theme** is optional for AMOLED-friendly dark backgrounds.
-
-### Default phone state
-Choose one:
-
-- **System default** — removes AODControl's dimming override and restores the captured system AOD/UDFPS settings.
-- **AOFP** — enables AOD, requests screen-off UDFPS where supported, and makes the AOD fully black.
-- **Manual opacity** — enables AOD and applies a custom 0–100% dimming scrim.
-
-### Optional modes
-Each mode can be independently enabled. Every enabled mode can use **System default**, **AOFP**, or its own **Manual opacity**.
-
-- **Night mode** — editable start/end time, default 7:00 PM → 6:00 AM.
-- **Navigation mode** — choose installed navigation/ride apps. The mode activates while a selected app is in the foreground.
-- **Outdoor hours** — editable daytime schedule, default 8:00 AM → 6:00 PM.
-- **Charging mode** — activates while plugged in / charging / full.
-
-Priority when several modes are active:
+Automatic modes remain:
 
 `Charging → Navigation → Outdoor → Night → Default`
 
-Automatic modes use a low-priority foreground service only while at least one mode is enabled. With all modes disabled, there is no background service.
+### Universal AOD fallback
+
+Universal AOD is optional and lives under **Advanced settings → Universal AOD**.
+
+It is designed for three cases:
+
+1. **Continuous native AOD** — AODControl leaves it alone. The fallback remains idle while Android reports the built-in display in DOZE/DOZE_SUSPEND.
+2. **Time-limited native AOD** — AODControl waits for the OEM AOD to finish. If the display later reaches true `STATE_OFF`, the custom AOD can take over.
+3. **No native AOD** — once the locked display reaches `STATE_OFF`, the custom AOD can start immediately.
+
+Custom AOD currently shows a minimal clock, date and battery level on black, with small position shifts for OLED image-retention protection.
+
+Modes:
+
+- **Temporary** — 5–60 seconds, default 10 seconds, then requests real screen-off again through the restricted Shizuku service.
+- **Continuous** — stays visible until Android/user interaction ends the custom AOD session.
+
+Custom AOD brightness is adjustable from 1–20%.
+
+### LCD safety
+
+AOD on LCD is blocked by default because black pixels still require the LCD backlight.
+
+- **Allow AOD on LCD** must be explicitly enabled.
+- Temporary mode is recommended for LCD.
+- If automatic display-tech detection cannot identify the panel, AODControl treats it conservatively like a possible LCD until the user allows LCD AOD or manually selects OLED.
+
+Display technology can be set to **Auto / OLED / LCD**. Auto uses read-only panel/property hints through the restricted Shizuku UserService where available; it does not use a hardcoded device-model list.
+
+### Appearance
+
+- System / Light / Dark
+- Dark olive palette by default
+- Optional Material You dynamic color
+- Optional pure-black dark theme
+
+## Permissions / services
+
+- Shizuku: native AOD controls, read-only compatibility hints, and exact sleep request after Temporary AOD.
+- Display over other apps: required only for Universal AOD fallback so Android can permit the custom lock-screen AOD to be started from the background.
+- A low-priority foreground service runs only while Universal AOD is enabled and allowed.
+- The existing automation foreground service still runs only when one or more automatic modes are enabled.
 
 ## Requirements
 
 - Android 8.0+ (`minSdk 26`)
-- Shizuku v11+
-- A device/SystemUI implementation that honors `always_on_display_constants` / `dimming_scrim_array`
-- Screen-off fingerprint support depends on the device/OEM implementation
-
-No root is required when Shizuku is started through Wireless Debugging/ADB.
+- Shizuku v11+ for native controls and exact Temporary AOD sleep behavior
+- No root
 
 ## Privacy / security
 
 - No internet permission.
 - No fingerprint templates or biometric authentication data are accessed.
-- Navigation mode only checks the foreground package name through the restricted Shizuku UserService.
-- The Shizuku service exposes only the settings operations and foreground-app query used by AODControl; it is not a general shell bridge.
+- Navigation mode checks only the foreground package name.
+- The Shizuku UserService is restricted; it does not expose a general arbitrary-shell interface.
 
 ## Build
 
 GitHub Actions builds a debug APK on every push to `main` / `master`.
 
-Locally:
-
 ```bash
 gradle :app:assembleDebug
 ```
 
-The APK is written to:
+APK:
 
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## Notes
+## Compatibility note
 
-Some SystemUI implementations cache AOD opacity while an AOD session is already active. In that case a newly selected mode is guaranteed in settings immediately, while the visible AOD may refresh on the next AOD entry (for example the next lock/wake cycle).
+OEM lock screens and background-start policies vary. Universal AOD deliberately uses capability/fallback behavior rather than assuming every manufacturer implements AOD the same way. The first physical-device testing phase should verify whether each OEM permits the custom lock-screen activity and reports native AOD as DOZE before its time limit expires.

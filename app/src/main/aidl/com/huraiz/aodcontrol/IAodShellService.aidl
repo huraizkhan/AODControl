@@ -8,6 +8,8 @@ interface IAodShellService {
     String removeDimmingOverride() = 5;
     int[] getSystemDefaultDimmingArray() = 6;
     String getForegroundPackage() = 7;
+    String getDisplayPanelHints() = 8;
+    String sleepScreen() = 9;
 
     void destroy() = 16777114;
 }

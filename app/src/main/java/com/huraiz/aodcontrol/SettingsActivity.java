@@ -84,9 +84,32 @@ public class SettingsActivity extends Activity {
                 });
 
         addGap(root, 22);
+        root.addView(section("◫  AOD engines"));
+        LinearLayout engines = card();
+        TextView universalTitle = text("Universal AOD", 17, colors.text, false);
+        universalTitle.setPadding(dp(18), dp(14), dp(18), dp(2));
+        engines.addView(universalTitle);
+        TextView universalSub = text("Fallback for phones without native AOD and for native AOD that turns itself off after a time limit.", 13, colors.muted, false);
+        universalSub.setPadding(dp(18), 0, dp(18), dp(10));
+        engines.addView(universalSub);
+        Button universal = new Button(this);
+        universal.setAllCaps(false);
+        universal.setText("Configure Universal AOD");
+        universal.setTextColor(colors.text);
+        GradientDrawable universalBg = new GradientDrawable();
+        universalBg.setColor(colors.surfaceAlt);
+        universalBg.setCornerRadius(dp(16));
+        universal.setBackground(universalBg);
+        universal.setOnClickListener(v -> startActivity(new android.content.Intent(this, UniversalAodSettingsActivity.class)));
+        LinearLayout.LayoutParams universalLp = matchWrap();
+        universalLp.setMargins(dp(14), 0, dp(14), dp(14));
+        engines.addView(universal, universalLp);
+        root.addView(engines, matchWrap());
+
+        addGap(root, 22);
         root.addView(section("ⓘ  About"));
         LinearLayout about = card();
-        about.addView(rowText("AODControl", "Version 1.2.0"));
+        about.addView(rowText("AODControl", "Version 1.3.0"));
         addDivider(about);
         about.addView(rowText("Device", Build.MANUFACTURER + " " + Build.MODEL));
         addDivider(about);

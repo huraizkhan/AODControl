@@ -101,8 +101,36 @@ public class AodShellUserService extends IAodShellService.Stub {
     }
 
     @Override
+    public String getDisplayPanelHints() {
+        StringBuilder out = new StringBuilder();
+        appendRelevantLines(out, run("/system/bin/getprop").output);
+        appendRelevantLines(out, run("/system/bin/dumpsys", "display").output);
+        if (out.length() > 8000) return out.substring(0, 8000);
+        return out.toString();
+    }
+
+    @Override
+    public String sleepScreen() {
+        return errorFrom(run("/system/bin/input", "keyevent", "223"));
+    }
+
+    @Override
     public void destroy() {
         System.exit(0);
+    }
+
+
+    private static void appendRelevantLines(StringBuilder out, String text) {
+        if (text == null || text.isEmpty()) return;
+        for (String line : text.split("\\r?\\n")) {
+            String lower = line.toLowerCase();
+            if (!(lower.contains("display") || lower.contains("panel") || lower.contains("oled")
+                    || lower.contains("amoled") || lower.contains("poled") || lower.contains("lcd")
+                    || lower.contains("dsi"))) continue;
+            if (out.length() > 0) out.append('\n');
+            out.append(line);
+            if (out.length() >= 8000) return;
+        }
     }
 
     private static int[] parseResourceIntArray(String output) {
