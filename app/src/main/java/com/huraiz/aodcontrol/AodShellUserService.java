@@ -5,15 +5,22 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Restricted Shizuku UserService. It exposes only the settings operations used
- * by AODControl; it is not a general-purpose shell command bridge.
+ * Restricted Shizuku UserService. Only AOD settings, foreground-package lookup,
+ * wake-screen, and read-only touchscreen observation are exposed.
  */
 public class AodShellUserService extends IAodShellService.Stub {
     private volatile int[] defaultDimmingCache;
+
+    private final Object touchLock = new Object();
+    private TouchDevice touchDevice;
+    private Process touchProcess;
+    private BufferedReader touchReader;
+    private final TouchAccumulator touchAccumulator = new TouchAccumulator();
 
     public AodShellUserService() {}
 
@@ -45,9 +52,7 @@ public class AodShellUserService extends IAodShellService.Stub {
         raw = clamp(raw, 0, 255);
         String current = getSetting("global", AodSettings.AOD_CONSTANTS);
 
-        if (bucketCount <= 0) {
-            bucketCount = AodSettings.bucketCountFromConstants(current);
-        }
+        if (bucketCount <= 0) bucketCount = AodSettings.bucketCountFromConstants(current);
         if (bucketCount <= 0) {
             int[] defaults = getSystemDefaultDimmingArray();
             bucketCount = defaults == null ? AodSettings.DEFAULT_BUCKET_COUNT : defaults.length;
@@ -63,9 +68,7 @@ public class AodShellUserService extends IAodShellService.Stub {
     public String removeDimmingOverride() {
         String current = getSetting("global", AodSettings.AOD_CONSTANTS);
         String updated = AodSettings.removeKey(current, AodSettings.DIMMING_KEY);
-        if (updated == null || updated.isEmpty()) {
-            return deleteSetting("global", AodSettings.AOD_CONSTANTS);
-        }
+        if (updated == null || updated.isEmpty()) return deleteSetting("global", AodSettings.AOD_CONSTANTS);
         return putSetting("global", AodSettings.AOD_CONSTANTS, updated);
     }
 
@@ -89,60 +92,159 @@ public class AodShellUserService extends IAodShellService.Stub {
         return fallback;
     }
 
-
     @Override
     public String getForegroundPackage() {
         CommandResult activity = run("/system/bin/dumpsys", "activity", "activities");
         String pkg = parseFocusedPackage(activity.output);
         if (pkg != null) return pkg;
-
-        CommandResult window = run("/system/bin/dumpsys", "window", "windows");
-        return parseFocusedPackage(window.output);
+        return parseFocusedPackage(run("/system/bin/dumpsys", "window", "windows").output);
     }
 
     @Override
-    public String getDisplayPanelHints() {
-        StringBuilder out = new StringBuilder();
-        appendRelevantLines(out, run("/system/bin/getprop").output);
-        appendRelevantLines(out, run("/system/bin/dumpsys", "display").output);
-        if (out.length() > 8000) return out.substring(0, 8000);
-        return out.toString();
+    public String getTouchCapabilities() {
+        synchronized (touchLock) {
+            TouchDevice device = ensureTouchDeviceLocked();
+            if (device == null) return "Unavailable • no readable multitouch input device found";
+            if (!ensureTouchProcessLocked()) return "Unavailable • shell cannot read " + device.path;
+            return "Ready • " + device.name + " • " + device.maxX + "×" + device.maxY;
+        }
     }
 
     @Override
-    public String sleepScreen() {
-        return errorFrom(run("/system/bin/input", "keyevent", "223"));
+    public String waitForTouchEvent(int timeoutMs) {
+        timeoutMs = clamp(timeoutMs, 100, 2500);
+        synchronized (touchLock) {
+            if (!ensureTouchProcessLocked()) return "ERR:Touch input unavailable";
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            try {
+                while (System.currentTimeMillis() < deadline) {
+                    if (touchProcess == null || !touchProcess.isAlive()) {
+                        stopTouchMonitorLocked();
+                        return "ERR:Touch input monitor stopped";
+                    }
+                    if (touchReader != null && touchReader.ready()) {
+                        String line = touchReader.readLine();
+                        if (line == null) {
+                            stopTouchMonitorLocked();
+                            return "ERR:Touch input monitor ended";
+                        }
+                        String completed = touchAccumulator.consume(line, touchDevice);
+                        if (completed != null) return completed;
+                    } else {
+                        try { Thread.sleep(8L); } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            return "";
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                stopTouchMonitorLocked();
+                return "ERR:" + t.getClass().getSimpleName();
+            }
+            return "";
+        }
     }
 
     @Override
-    public String startCustomAod() {
-        // Launch through shell identity so Android background-activity restrictions do
-        // not prevent the user-enabled AOD screen from appearing over keyguard.
-        // The activity itself is protected by android.permission.DUMP, which shell
-        // holds but ordinary third-party applications do not.
-        return errorFrom(run(
-                "/system/bin/am", "start", "-W", "--user", "current",
-                "--activity-no-animation", "--activity-exclude-from-recents",
-                "-n", "com.huraiz.aodcontrol/.CustomAodActivity"));
+    public String wakeScreen() {
+        return errorFrom(run("/system/bin/input", "keyevent", "224"));
     }
 
     @Override
     public void destroy() {
+        synchronized (touchLock) { stopTouchMonitorLocked(); }
         System.exit(0);
     }
 
+    private TouchDevice ensureTouchDeviceLocked() {
+        if (touchDevice != null) return touchDevice;
+        CommandResult listing = run("/system/bin/getevent", "-lp");
+        if (listing.exitCode != 0 || listing.output.isEmpty()) return null;
+        touchDevice = parseTouchDevice(listing.output);
+        return touchDevice;
+    }
 
-    private static void appendRelevantLines(StringBuilder out, String text) {
-        if (text == null || text.isEmpty()) return;
-        for (String line : text.split("\\r?\\n")) {
-            String lower = line.toLowerCase();
-            if (!(lower.contains("display") || lower.contains("panel") || lower.contains("oled")
-                    || lower.contains("amoled") || lower.contains("poled") || lower.contains("lcd")
-                    || lower.contains("dsi"))) continue;
-            if (out.length() > 0) out.append('\n');
-            out.append(line);
-            if (out.length() >= 8000) return;
+    private boolean ensureTouchProcessLocked() {
+        if (touchProcess != null && touchProcess.isAlive() && touchReader != null) return true;
+        stopTouchMonitorLocked();
+        TouchDevice device = ensureTouchDeviceLocked();
+        if (device == null) return false;
+        try {
+            ProcessBuilder builder = new ProcessBuilder("/system/bin/getevent", "-lt", device.path);
+            builder.redirectErrorStream(true);
+            touchProcess = builder.start();
+            touchReader = new BufferedReader(new InputStreamReader(
+                    touchProcess.getInputStream(), StandardCharsets.UTF_8));
+            touchAccumulator.reset();
+            try { Thread.sleep(35L); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            if (!touchProcess.isAlive()) {
+                stopTouchMonitorLocked();
+                return false;
+            }
+            return true;
+        } catch (Throwable t) {
+            stopTouchMonitorLocked();
+            return false;
         }
+    }
+
+    private void stopTouchMonitorLocked() {
+        touchAccumulator.reset();
+        if (touchReader != null) {
+            try { touchReader.close(); } catch (Throwable ignored) {}
+        }
+        if (touchProcess != null) {
+            try { touchProcess.destroy(); } catch (Throwable ignored) {}
+        }
+        touchReader = null;
+        touchProcess = null;
+    }
+
+    private static TouchDevice parseTouchDevice(String output) {
+        String currentPath = null;
+        String currentName = "Touchscreen";
+        int maxX = -1;
+        int maxY = -1;
+        List<TouchDevice> candidates = new ArrayList<>();
+
+        Pattern pathPattern = Pattern.compile("(?:add device \\d+:\\s*)?(/dev/input/event\\d+)");
+        Pattern namePattern = Pattern.compile("name:\\s*\\\"([^\\\"]+)\\\"");
+        Pattern maxPattern = Pattern.compile("max\\s+(-?\\d+)");
+
+        for (String line : output.split("\\r?\\n")) {
+            Matcher pathMatcher = pathPattern.matcher(line);
+            if (pathMatcher.find()) {
+                if (currentPath != null && maxX > 0 && maxY > 0) {
+                    candidates.add(new TouchDevice(currentPath, currentName, maxX, maxY));
+                }
+                currentPath = pathMatcher.group(1);
+                currentName = "Touchscreen";
+                maxX = -1;
+                maxY = -1;
+                continue;
+            }
+            if (currentPath == null) continue;
+            Matcher nameMatcher = namePattern.matcher(line);
+            if (nameMatcher.find()) currentName = nameMatcher.group(1);
+            if (line.contains("ABS_MT_POSITION_X") || line.matches(".*\\bABS_X\\b.*")) {
+                Matcher m = maxPattern.matcher(line);
+                if (m.find()) maxX = parseIntSafe(m.group(1), maxX);
+            }
+            if (line.contains("ABS_MT_POSITION_Y") || line.matches(".*\\bABS_Y\\b.*")) {
+                Matcher m = maxPattern.matcher(line);
+                if (m.find()) maxY = parseIntSafe(m.group(1), maxY);
+            }
+        }
+        if (currentPath != null && maxX > 0 && maxY > 0) {
+            candidates.add(new TouchDevice(currentPath, currentName, maxX, maxY));
+        }
+        if (candidates.isEmpty()) return null;
+        for (TouchDevice c : candidates) {
+            String n = c.name.toLowerCase(Locale.US);
+            if (n.contains("touch") || n.contains("tsp") || n.contains("goodix")
+                    || n.contains("focal") || n.contains("synaptics")) return c;
+        }
+        return candidates.get(0);
     }
 
     private static int[] parseResourceIntArray(String output) {
@@ -164,13 +266,10 @@ public class AodShellUserService extends IAodShellService.Stub {
         return out;
     }
 
-
     private static String parseFocusedPackage(String output) {
         if (output == null || output.isEmpty()) return null;
         Pattern component = Pattern.compile("([A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+)/(?:\\.?[A-Za-z0-9_.$]+)");
-        String[] priority = new String[] {
-                "topResumedActivity", "mResumedActivity", "mCurrentFocus", "mFocusedApp"
-        };
+        String[] priority = new String[] {"topResumedActivity", "mResumedActivity", "mCurrentFocus", "mFocusedApp"};
         for (String key : priority) {
             for (String line : output.split("\\r?\\n")) {
                 if (!line.contains(key)) continue;
@@ -222,12 +321,121 @@ public class AodShellUserService extends IAodShellService.Stub {
         try { return Integer.parseInt(value); } catch (Throwable ignored) { return fallback; }
     }
 
+    private static long parseHex(String value, long fallback) {
+        try {
+            value = value.trim();
+            if (value.startsWith("0x") || value.startsWith("0X")) value = value.substring(2);
+            return Long.parseUnsignedLong(value, 16);
+        } catch (Throwable ignored) { return fallback; }
+    }
+
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static String safe(String value) {
-        return value == null ? "" : value;
+    private static String safe(String value) { return value == null ? "" : value; }
+
+    private static final class TouchDevice {
+        final String path;
+        final String name;
+        final int maxX;
+        final int maxY;
+
+        TouchDevice(String path, String name, int maxX, int maxY) {
+            this.path = path;
+            this.name = name == null || name.isEmpty() ? "Touchscreen" : name;
+            this.maxX = maxX;
+            this.maxY = maxY;
+        }
+    }
+
+    private static final class TouchAccumulator {
+        private boolean active;
+        private boolean releasePending;
+        private boolean started;
+        private int x = -1;
+        private int y = -1;
+        private int startX;
+        private int startY;
+        private int lastX;
+        private int lastY;
+        private long downAt;
+
+        String consume(String line, TouchDevice device) {
+            if (line == null) return null;
+            if (line.contains("ABS_MT_TRACKING_ID")) {
+                String token = lastToken(line);
+                long id = parseHex(token, -2L);
+                if (id == 0xffffffffL || id == 0xffffffffffffffffL) {
+                    if (active || started) releasePending = true;
+                    active = false;
+                } else if (id >= 0) {
+                    beginContact();
+                }
+            } else if (line.contains("BTN_TOUCH")) {
+                String token = lastToken(line);
+                if ("DOWN".equalsIgnoreCase(token) || "00000001".equals(token)) beginContact();
+                if ("UP".equalsIgnoreCase(token) || "00000000".equals(token)) {
+                    if (active || started) releasePending = true;
+                    active = false;
+                }
+            } else if (line.contains("ABS_MT_POSITION_X") || line.matches(".*\\bABS_X\\b.*")) {
+                long value = parseHex(lastToken(line), -1L);
+                if (value >= 0 && value <= Integer.MAX_VALUE) x = (int) value;
+            } else if (line.contains("ABS_MT_POSITION_Y") || line.matches(".*\\bABS_Y\\b.*")) {
+                long value = parseHex(lastToken(line), -1L);
+                if (value >= 0 && value <= Integer.MAX_VALUE) y = (int) value;
+            }
+
+            if (line.contains("SYN_REPORT")) {
+                if ((active || releasePending) && x >= 0 && y >= 0) {
+                    if (!started) {
+                        started = true;
+                        startX = x;
+                        startY = y;
+                        downAt = System.currentTimeMillis();
+                    }
+                    lastX = x;
+                    lastY = y;
+                }
+                if (releasePending && started) {
+                    long duration = Math.max(1L, System.currentTimeMillis() - downAt);
+                    String payload = startX + "," + startY + "," + lastX + "," + lastY
+                            + "," + device.maxX + "," + device.maxY + "," + duration;
+                    resetContact();
+                    return payload;
+                }
+                if (releasePending) resetContact();
+            }
+            return null;
+        }
+
+        private void beginContact() {
+            active = true;
+            releasePending = false;
+            started = false;
+            x = -1;
+            y = -1;
+            downAt = System.currentTimeMillis();
+        }
+
+        void reset() { resetContact(); }
+
+        private void resetContact() {
+            active = false;
+            releasePending = false;
+            started = false;
+            x = -1;
+            y = -1;
+            startX = startY = lastX = lastY = 0;
+            downAt = 0L;
+        }
+
+        private static String lastToken(String line) {
+            String trimmed = line.trim();
+            int i = trimmed.lastIndexOf(' ');
+            return i < 0 ? trimmed : trimmed.substring(i + 1);
+        }
     }
 
     private static final class CommandResult {

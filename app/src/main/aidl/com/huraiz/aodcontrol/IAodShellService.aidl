@@ -8,9 +8,9 @@ interface IAodShellService {
     String removeDimmingOverride() = 5;
     int[] getSystemDefaultDimmingArray() = 6;
     String getForegroundPackage() = 7;
-    String getDisplayPanelHints() = 8;
-    String sleepScreen() = 9;
-    String startCustomAod() = 10;
+    String getTouchCapabilities() = 8;
+    String waitForTouchEvent(int timeoutMs) = 9;
+    String wakeScreen() = 10;
 
     void destroy() = 16777114;
 }

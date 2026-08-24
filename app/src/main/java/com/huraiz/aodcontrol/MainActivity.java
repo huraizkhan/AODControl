@@ -64,6 +64,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
     private TextView currentReason;
     private TextView automationStatus;
     private TextView navigationSummary;
+    private TextView gestureStatus;
 
     private BehaviorEditor defaultEditor;
     private ModeEditor nightMode;
@@ -92,7 +93,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         ShizukuBridge.addListener(this);
         refreshShizukuUi();
         AutomationService.sync(this);
-        UniversalAodService.sync(this);
+        AodGestureService.sync(this);
         if (!AppPrefs.anyAutomationEnabled(this)) applyDefaultNow();
     }
 
@@ -106,7 +107,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         refreshShizukuUi();
         refreshNavigationSummary();
         AutomationService.sync(this);
-        UniversalAodService.sync(this);
+        AodGestureService.sync(this);
         ui.removeCallbacks(statusTicker);
         ui.post(statusTicker);
     }
@@ -131,6 +132,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
             if (ShizukuBridge.isReady()) {
                 if (AppPrefs.anyAutomationEnabled(this)) AutomationService.refresh(this);
                 else applyDefaultNow();
+                AodGestureService.sync(this);
             }
         });
     }
@@ -176,6 +178,10 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         buildCurrentStateCard(root);
 
         addGap(root, 20);
+        root.addView(sectionHeading("↕  AOD gestures"));
+        buildGestureCard(root);
+
+        addGap(root, 20);
         root.addView(sectionHeading("◇  Connection"));
         buildShizukuCard(root);
 
@@ -184,12 +190,23 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         advanced.setOnClickListener(v -> startActivity(new Intent(this, SettingsActivity.class)));
         root.addView(advanced, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(56)));
 
-        TextView footer = text("No automation service runs when every automatic mode is disabled.", 11, MUTED, false);
+        TextView footer = text("Background components run only while automatic modes or AOD gestures are enabled.", 11, MUTED, false);
         footer.setGravity(Gravity.CENTER_HORIZONTAL);
         footer.setPadding(dp(8), dp(12), dp(8), 0);
         root.addView(footer);
 
         return scroll;
+    }
+
+    private void buildGestureCard(LinearLayout root) {
+        LinearLayout gestureCard = card(CARD);
+        gestureStatus = text("Disabled", 14, MUTED, false);
+        gestureStatus.setPadding(0, dp(4), 0, dp(10));
+        gestureCard.addView(gestureStatus);
+        Button configure = button("Configure AOD gestures");
+        configure.setOnClickListener(v -> startActivity(new Intent(this, GestureSettingsActivity.class)));
+        gestureCard.addView(configure, matchWrap());
+        root.addView(gestureCard, cardParams());
     }
 
     private void buildShizukuCard(LinearLayout root) {
@@ -310,6 +327,10 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
             automationStatus.setText("Automation stopped • no background service");
             automationStatus.setTextColor(MUTED);
         }
+        if (gestureStatus != null) {
+            gestureStatus.setText(AodGestureService.statusText(this));
+            gestureStatus.setTextColor(AppPrefs.isGesturesEnabled(this) ? TEXT : MUTED);
+        }
     }
 
     private void refreshShizukuUi() {
@@ -342,7 +363,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
         } else {
             shizukuStatus.setText("Shizuku connected ✓");
             shizukuStatus.setTextColor(GOOD);
-            shizukuDetail.setText("Ready to apply AOD settings and detect selected foreground apps.");
+            shizukuDetail.setText("Ready for AOD settings, navigation detection and optional AOD gestures.");
             shizukuButton.setText("Ready");
             shizukuButton.setEnabled(false);
         }
