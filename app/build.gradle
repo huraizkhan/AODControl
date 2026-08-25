@@ -2,21 +2,40 @@ plugins {
     id 'com.android.application'
 }
 
+def stableKeystoreFile = System.getenv('AOD_KEYSTORE_FILE')
+def stableStorePassword = System.getenv('AOD_KEYSTORE_PASSWORD')
+def stableKeyAlias = System.getenv('AOD_KEY_ALIAS')
+def stableKeyPassword = System.getenv('AOD_KEY_PASSWORD')
+def stableSigningAvailable = stableKeystoreFile && stableStorePassword && stableKeyAlias && stableKeyPassword
+        && file(stableKeystoreFile).exists()
+
 android {
     namespace 'com.huraiz.aodcontrol'
     compileSdk 35
+
+    if (stableSigningAvailable) {
+        signingConfigs {
+            stable {
+                storeFile file(stableKeystoreFile)
+                storePassword stableStorePassword
+                keyAlias stableKeyAlias
+                keyPassword stableKeyPassword
+            }
+        }
+    }
 
     defaultConfig {
         applicationId 'com.huraiz.aodcontrol'
         minSdk 26
         targetSdk 35
-        versionCode 18
-        versionName '1.4.8'
+        versionCode 19
+        versionName '1.4.9'
     }
 
     buildTypes {
         release {
             minifyEnabled false
+            if (stableSigningAvailable) signingConfig signingConfigs.stable
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

@@ -68,6 +68,7 @@ public final class AppPrefs {
     private static final String KEY_GESTURE_SCOPE = "gesture_scope";
     private static final String KEY_FOREGROUND_FALLBACK = "foreground_fallback";
     private static final String KEY_POCKET_PROTECTION = "gesture_pocket_protection";
+    private static final String KEY_VOLUME_SLIDER_SENSITIVITY = "volume_slider_sensitivity_percent_per_inch";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -175,6 +176,14 @@ public final class AppPrefs {
 
     public static void setPocketProtectionEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_POCKET_PROTECTION, enabled).apply();
+    }
+
+    public static int getVolumeSliderSensitivity(Context context) {
+        return clamp(prefs(context).getInt(KEY_VOLUME_SLIDER_SENSITIVITY, 35), 5, 100);
+    }
+
+    public static void setVolumeSliderSensitivity(Context context, int value) {
+        prefs(context).edit().putInt(KEY_VOLUME_SLIDER_SENSITIVITY, clamp(value, 5, 100)).apply();
     }
 
     public static int getGestureAction(Context context, String gesture) {

@@ -30,12 +30,28 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        run: gradle :app:assembleDebug --stacktrace
+      - name: Restore stable signing key
+        env:
+          AOD_KEYSTORE_BASE64: ${{ secrets.AOD_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$AOD_KEYSTORE_BASE64" || { echo "Missing AOD_KEYSTORE_BASE64 secret"; exit 1; }
+          echo "$AOD_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/aodcontrol-release.jks"
+
+      - name: Build signed release APK
+        env:
+          AOD_KEYSTORE_FILE: ${{ runner.temp }}/aodcontrol-release.jks
+          AOD_KEYSTORE_PASSWORD: ${{ secrets.AOD_KEYSTORE_PASSWORD }}
+          AOD_KEY_ALIAS: ${{ secrets.AOD_KEY_ALIAS }}
+          AOD_KEY_PASSWORD: ${{ secrets.AOD_KEY_PASSWORD }}
+        run: |
+          test -n "$AOD_KEYSTORE_PASSWORD" || { echo "Missing AOD_KEYSTORE_PASSWORD secret"; exit 1; }
+          test -n "$AOD_KEY_ALIAS" || { echo "Missing AOD_KEY_ALIAS secret"; exit 1; }
+          test -n "$AOD_KEY_PASSWORD" || { echo "Missing AOD_KEY_PASSWORD secret"; exit 1; }
+          gradle :app:assembleRelease --stacktrace
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: AODControl-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: AODControl-release
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

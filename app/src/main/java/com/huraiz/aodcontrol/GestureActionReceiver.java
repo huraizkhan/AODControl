@@ -16,7 +16,13 @@ public final class GestureActionReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent intent) {
         if (intent == null || !"com.huraiz.aodcontrol.GESTURE_ACTION".equals(intent.getAction())) return;
         int action = intent.getIntExtra("action", AppPrefs.GESTURE_ACTION_NONE);
-        if (action == AppPrefs.GESTURE_ACTION_TORCH) toggleTorch(context.getApplicationContext());
+        Context app = context.getApplicationContext();
+        if (action == AppPrefs.GESTURE_ACTION_TORCH) {
+            toggleTorch(app);
+        } else if (action == AppPrefs.GESTURE_ACTION_VOLUME_SLIDER) {
+            int normalized = intent.getIntExtra("value", 0);
+            VolumeSlideController.apply(app, normalized / 10000f);
+        }
     }
 
     private static void toggleTorch(Context context) {

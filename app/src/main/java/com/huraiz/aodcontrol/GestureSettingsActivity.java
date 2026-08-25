@@ -42,6 +42,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     private TextView edgeWidthValue;
     private TextView activeHeightValue;
     private TextView sensitivityValue;
+    private TextView volumeSliderSensitivityValue;
     private TextView scopeValue;
     private GestureZonePreviewView gesturePreview;
     private final Map<String, TextView> actionLabels = new LinkedHashMap<>();
@@ -160,7 +161,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         addDivider(previewCard);
         activeHeightValue = addSliderRow(previewCard, "Active gesture height",
                 "Centered vertical area where gestures may start.",
-                40, 100, AppPrefs.getGestureActiveHeightPercent(this), value -> {
+                40, 100, AppPrefs.getGestureActiveHeightPercent(this), "%", value -> {
                     AppPrefs.setGestureActiveHeightPercent(this, value);
                     AodGestureService.sync(this);
                     if (activeHeightValue != null) activeHeightValue.setText(value + "%");
@@ -169,7 +170,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         addDivider(previewCard);
         edgeWidthValue = addSliderRow(previewCard, "Edge width",
                 "Width of the left/right edge slide zones.",
-                8, 35, AppPrefs.getGestureEdgeWidthPercent(this), value -> {
+                8, 35, AppPrefs.getGestureEdgeWidthPercent(this), "%", value -> {
                     AppPrefs.setGestureEdgeWidthPercent(this, value);
                     AodGestureService.sync(this);
                     if (edgeWidthValue != null) edgeWidthValue.setText(value + "%");
@@ -178,10 +179,19 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         addDivider(previewCard);
         sensitivityValue = addSliderRow(previewCard, "Gesture sensitivity",
                 "Higher values accept shorter and less perfectly straight swipes.",
-                1, 100, AppPrefs.getGestureSensitivityPercent(this), value -> {
+                1, 100, AppPrefs.getGestureSensitivityPercent(this), "%", value -> {
                     AppPrefs.setGestureSensitivityPercent(this, value);
                     AodGestureService.sync(this);
                     if (sensitivityValue != null) sensitivityValue.setText(value + "%");
+                });
+        addDivider(previewCard);
+        volumeSliderSensitivityValue = addSliderRow(previewCard, "Volume slider sensitivity",
+                "Media-volume change for each inch of vertical edge movement. Higher values change volume faster.",
+                5, 100, AppPrefs.getVolumeSliderSensitivity(this), "% / inch", value -> {
+                    AppPrefs.setVolumeSliderSensitivity(this, value);
+                    if (volumeSliderSensitivityValue != null) {
+                        volumeSliderSensitivityValue.setText(value + "% / inch");
+                    }
                 });
 
         addGap(root, 22);
@@ -368,6 +378,9 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         if (activeHeightValue != null) activeHeightValue.setText(AppPrefs.getGestureActiveHeightPercent(this) + "%");
         if (edgeWidthValue != null) edgeWidthValue.setText(AppPrefs.getGestureEdgeWidthPercent(this) + "%");
         if (sensitivityValue != null) sensitivityValue.setText(AppPrefs.getGestureSensitivityPercent(this) + "%");
+        if (volumeSliderSensitivityValue != null) {
+            volumeSliderSensitivityValue.setText(AppPrefs.getVolumeSliderSensitivity(this) + "% / inch");
+        }
         if (scopeValue != null) scopeValue.setText(AppPrefs.gestureScopeLabel(AppPrefs.getGestureScope(this)));
         if (gesturePreview != null) gesturePreview.invalidate();
         refreshStatus();
@@ -399,7 +412,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     private interface SliderListener { void onChanged(int value); }
 
     private TextView addSliderRow(LinearLayout parent, String title, String subtitle,
-                                  int min, int max, int current, SliderListener listener) {
+                                  int min, int max, int current, String suffix, SliderListener listener) {
         LinearLayout host = vertical();
         host.setPadding(dp(18), dp(13), dp(18), dp(12));
 
@@ -408,9 +421,9 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         heading.setGravity(Gravity.CENTER_VERTICAL);
         TextView titleView = text(title, 15, colors.text, false);
         heading.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView valueView = text(current + "%", 13, colors.accent, true);
+        TextView valueView = text(current + suffix, 13, colors.accent, true);
         valueView.setGravity(Gravity.END);
-        heading.addView(valueView, new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
+        heading.addView(valueView, new LinearLayout.LayoutParams(dp(92), LinearLayout.LayoutParams.WRAP_CONTENT));
         host.addView(heading, matchWrap());
 
         TextView sub = text(subtitle, 11, colors.muted, false);
@@ -425,7 +438,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
             @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
                 int value = min + progress;
-                valueView.setText(value + "%");
+                valueView.setText(value + suffix);
                 if (fromUser) listener.onChanged(value);
             }
             @Override public void onStartTrackingTouch(SeekBar seekBar) {}

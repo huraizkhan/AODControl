@@ -433,10 +433,8 @@ public class AodShellUserService extends IAodShellService.Stub {
                 break;
             case AppPrefs.GESTURE_ACTION_VOLUME_SLIDER:
                 if (sample != null) {
-                    float fraction = sample.verticalFractionUp();
-                    int steps = Math.max(1, Math.min(10, Math.round(Math.abs(fraction) * 10f)));
-                    int key = fraction >= 0 ? 24 : 25;
-                    for (int i = 0; i < steps; i++) run("/system/bin/input", "keyevent", Integer.toString(key));
+                    int normalized = Math.round(sample.verticalFractionUp() * 10000f);
+                    sendAppGestureAction(action, normalized);
                 }
                 break;
             case AppPrefs.GESTURE_ACTION_WAKE_AOD:

@@ -254,14 +254,8 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
     }
 
     private void applyVolumeSlide(TouchSample sample) {
-        if (audioManager == null) return;
-        int max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
-        int current = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
-        float fraction = sample.verticalFractionUp();
-        int delta = Math.round(fraction * Math.max(4, max));
-        if (delta == 0) delta = fraction > 0 ? 1 : -1;
-        int target = Math.max(0, Math.min(max, current + delta));
-        try { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0); } catch (Throwable ignored) {}
+        if (sample == null) return;
+        VolumeSlideController.apply(this, sample.verticalFractionUp());
     }
 
     private void adjustVolume(int direction) {

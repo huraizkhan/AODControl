@@ -128,7 +128,7 @@ public class SettingsActivity extends Activity {
         addGap(root, 22);
         root.addView(section("ⓘ  About"));
         LinearLayout about = card();
-        about.addView(rowText("AODControl", "Version 1.4.8"));
+        about.addView(rowText("AODControl", "Version 1.4.9"));
         addDivider(about);
         about.addView(rowText("Device", Build.MANUFACTURER + " " + Build.MODEL));
         addDivider(about);

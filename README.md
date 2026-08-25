@@ -139,3 +139,9 @@ Restores the exact v1.4.5 Shizuku touch engine after the v1.4.6 keep-alive/pocke
 - Restores pocket/mistouch prevention without changing the stable v1.4.7 Shizuku AIDL gesture interface.
 - Pocket protection is enabled by default and checks Android's current proximity state only after a completed AOD/lock-screen touch.
 - No AOD keep-alive changes are included in this build.
+
+
+## v1.4.9
+- Edge Volume Slider now has an independent 5–100% per inch sensitivity control (35%/inch default).
+- Shizuku background mode forwards the measured edge distance to the app-side volume controller, so the stable v1.4.8 gesture AIDL interface stays unchanged.
+- GitHub Actions now supports one permanent release-signing key from GitHub Secrets. Run `scripts/setup-stable-signing-termux.sh` once from Termux before the first v1.4.9 Actions build.
