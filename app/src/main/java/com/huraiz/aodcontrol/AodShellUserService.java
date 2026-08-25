@@ -159,24 +159,56 @@ public class AodShellUserService extends IAodShellService.Stub {
 
     @Override
     public String refreshNativeAod() {
-        // Pixel/SystemUI reads the dimming scrim when a fresh doze session starts.
-        // Changing always_on_display_constants alone may not redraw an already
-        // active AOFP session, so briefly cycle the native AOD setting without
-        // issuing KEYCODE_WAKEUP (which would show the full lock screen).
+        // Pixel/SystemUI keeps the active Doze session's scrim cached. Merely
+        // rewriting doze_always_on does not rebuild that session, so AOFP opacity
+        // changes can otherwise wait until the next real screen-on/off cycle.
+        //
+        // Shell cannot use `cmd dreams start-dreaming/stop-dreaming` on modern
+        // Android because DreamShellCommand is root-only. Instead, perform the
+        // smallest power-state pulse available to Shizuku's shell identity:
+        // disable AOD -> wake -> restore AOD -> sleep. The wake window is kept
+        // deliberately tiny so the panel normally transitions straight back into
+        // native AOD rather than remaining on the lock screen.
         String current = getSetting("secure", AodSettings.DOZE_ALWAYS_ON);
         if (!"1".equals(current)) return "Native AOD is disabled";
 
         String error = putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "0");
         if (error != null && !error.isEmpty()) return error;
-        try { Thread.sleep(140L); } catch (InterruptedException e) {
+
+        try { Thread.sleep(35L); } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+            return "AOD refresh interrupted";
         }
+
+        CommandResult wake = run("/system/bin/input", "keyevent", "224");
+        if (wake.exitCode != 0) {
+            putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+            return errorFrom(wake);
+        }
+
+        // Give PowerManager just enough time to leave the old Doze session before
+        // re-enabling AOD and immediately requesting sleep again.
+        try { Thread.sleep(45L); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+            run("/system/bin/input", "keyevent", "223");
+            return "AOD refresh interrupted";
+        }
+
         error = putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
         if (error != null && !error.isEmpty()) {
-            // Best effort restore if the second write failed.
             putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+            run("/system/bin/input", "keyevent", "223");
             return error;
         }
+
+        try { Thread.sleep(25L); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
+        CommandResult sleep = run("/system/bin/input", "keyevent", "223");
+        if (sleep.exitCode != 0) return errorFrom(sleep);
         return "";
     }
 

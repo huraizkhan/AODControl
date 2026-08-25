@@ -110,3 +110,7 @@ app/build/outputs/apk/debug/app-debug.apk
 - Assigning Volume slider to one edge direction reserves both directions on that physical edge.
 - Wake AOD / Sleep AOD now refresh the native doze session after changing the scrim, without intentionally waking the full lock screen.
 - Automatic mode transitions, especially charger connect/disconnect, are re-evaluated immediately and refresh an already-running native AOD so the new opacity becomes visible promptly.
+
+## v1.4.3 live native-AOD refresh
+
+Wake AOD, Sleep AOD, and automatic-mode transitions now rebuild the active native Doze/AOD session with a very short Shizuku power-state pulse after changing the scrim. This is intended for devices such as Pixel where SystemUI caches the scrim for the lifetime of the current Doze session.
