@@ -25,8 +25,8 @@ public final class GestureZonePreviewView extends View {
 
     @Override protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         int width = MeasureSpec.getSize(widthMeasureSpec);
-        if (width <= 0) width = dp(280);
-        int desired = Math.min(dp(420), Math.round(width * 1.22f));
+        if (width <= 0) width = Math.round(dp(280));
+        int desired = Math.min(Math.round(dp(420)), Math.round(width * 1.22f));
         setMeasuredDimension(resolveSize(width, widthMeasureSpec), resolveSize(desired, heightMeasureSpec));
     }
 
