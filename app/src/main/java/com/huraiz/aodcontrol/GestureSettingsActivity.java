@@ -136,6 +136,14 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 this::showScopePicker);
 
         addDivider(master);
+        addSecondarySwitchRow(master, "Pocket protection",
+                "Ignore AOD and lock-screen gestures when the proximity sensor reports the phone is covered. Prevents accidental touches in a pocket. Shizuku background mode only.",
+                AppPrefs.isPocketProtectionEnabled(this), checked -> {
+                    AppPrefs.setPocketProtectionEnabled(this, checked);
+                    AodGestureService.sync(this);
+                });
+
+        addDivider(master);
         serviceStatus = text("", 13, colors.accent, true);
         serviceStatus.setPadding(dp(18), dp(13), dp(18), dp(13));
         master.addView(serviceStatus);
@@ -426,6 +434,28 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         host.addView(seek, matchWrap());
         parent.addView(host, matchWrap());
         return valueView;
+    }
+
+    private void addSecondarySwitchRow(LinearLayout parent, String title, String subtitle,
+                                       boolean checked, ToggleListener listener) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(18), dp(14), dp(14), dp(14));
+
+        LinearLayout copy = vertical();
+        copy.addView(text(title, 17, colors.text, false));
+        TextView sub = text(subtitle, 13, colors.muted, false);
+        sub.setPadding(0, dp(3), dp(10), 0);
+        copy.addView(sub);
+        row.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        Switch toggle = new Switch(this);
+        toggle.setChecked(checked);
+        tintSwitch(toggle);
+        toggle.setOnCheckedChangeListener((buttonView, isChecked) -> listener.onChanged(isChecked));
+        row.addView(toggle);
+        parent.addView(row, matchWrap());
     }
 
     private void addSwitchRow(LinearLayout parent, String title, String subtitle,

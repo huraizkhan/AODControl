@@ -36,7 +36,10 @@ public final class ShizukuBackgroundEngine {
                     AppPrefs.getGestureAction(context, AppPrefs.GESTURE_LEFT_EDGE_UP),
                     AppPrefs.getGestureAction(context, AppPrefs.GESTURE_LEFT_EDGE_DOWN),
                     AppPrefs.getGestureAction(context, AppPrefs.GESTURE_RIGHT_EDGE_UP),
-                    AppPrefs.getGestureAction(context, AppPrefs.GESTURE_RIGHT_EDGE_DOWN)
+                    AppPrefs.getGestureAction(context, AppPrefs.GESTURE_RIGHT_EDGE_DOWN),
+                    // Extra configuration slot. The AIDL method is unchanged; the stable
+                    // v1.4.7 gesture action slots remain indices 0..9.
+                    AppPrefs.isPocketProtectionEnabled(context) ? 1 : 0
             };
             shell.configureGestureEngine(
                     AppPrefs.isGesturesEnabled(context) && AppPrefs.anyGestureActionConfigured(context),

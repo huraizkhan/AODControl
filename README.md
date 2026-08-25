@@ -134,3 +134,8 @@ AOD gestures can now be limited to AOD only, the visible lock screen only, or bo
 
 ## v1.4.7 corrective gesture rollback
 Restores the exact v1.4.5 Shizuku touch engine after the v1.4.6 keep-alive/pocket changes caused gesture input to stop. New installs still follow the system light/dark theme by default. Keep-alive and pocket protection are temporarily removed until they can be reintroduced without changing the proven gesture transport. The Shizuku UserService version is bumped so the corrected daemon is recreated on update.
+
+## v1.4.8 pocket protection
+- Restores pocket/mistouch prevention without changing the stable v1.4.7 Shizuku AIDL gesture interface.
+- Pocket protection is enabled by default and checks Android's current proximity state only after a completed AOD/lock-screen touch.
+- No AOD keep-alive changes are included in this build.

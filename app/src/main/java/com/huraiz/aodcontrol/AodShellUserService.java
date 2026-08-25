@@ -38,6 +38,7 @@ public class AodShellUserService extends IAodShellService.Stub {
     private volatile int engineActiveHeight = 100;
     private volatile int engineEdgeWidth = 20;
     private volatile int engineSensitivity = 70;
+    private volatile boolean enginePocketProtection;
     private volatile int[] engineActions = new int[10];
     private int enginePendingTapCount;
     private long engineLastTapAt;
@@ -263,6 +264,9 @@ public class AodShellUserService extends IAodShellService.Stub {
         engineActiveHeight = clamp(activeHeight, 40, 100);
         engineEdgeWidth = clamp(edgeWidth, 8, 35);
         engineSensitivity = clamp(sensitivity, 1, 100);
+        // Keep the proven v1.4.7 AIDL interface intact. A caller may append one
+        // optional config value after the ten gesture actions.
+        enginePocketProtection = actions != null && actions.length > 10 && actions[10] != 0;
         engineActions = actions == null ? new int[10] : copyActions(actions);
         backgroundStop = false;
         if (enabled) startGestureEngine();
@@ -355,6 +359,13 @@ public class AodShellUserService extends IAodShellService.Stub {
             // Evaluate scope only after a completed touch so normal idle time
             // does not trigger repeated dumpsys calls.
             if (!gestureScopeAllowsShell()) continue;
+            if (enginePocketProtection && isPocketCoveredShell()) {
+                enginePendingTapCount = 0;
+                engineLastTapAt = 0L;
+                engineLastTap = null;
+                backgroundStatus = "Shizuku background active • pocket protection";
+                continue;
+            }
             TouchSample sample = TouchSample.parse(payload);
             if (sample == null || !sample.startsInsideActiveHeight(engineActiveHeight)) continue;
             if (sample.isTap(engineSensitivity)) {
@@ -551,6 +562,33 @@ public class AodShellUserService extends IAodShellService.Stub {
         }
         if (engineScope == AppPrefs.GESTURE_SCOPE_AOD_ONLY) return false;
         return isKeyguardLockedShell();
+    }
+
+    private boolean isPocketCoveredShell() {
+        // Shell can read the display/power stack's current proximity decision.
+        // This check runs only after a completed touch, so it does not poll while idle
+        // and it does not modify the working evdev monitor.
+        String power = run("/system/bin/dumpsys", "power").output;
+        Boolean powerState = proximityState(power);
+        if (powerState != null) return powerState;
+
+        String display = run("/system/bin/dumpsys", "display").output;
+        Boolean displayState = proximityState(display);
+        return displayState != null && displayState;
+    }
+
+    private static Boolean proximityState(String value) {
+        if (value == null || value.isEmpty()) return null;
+        String v = value.toLowerCase(Locale.US);
+        if (v.contains("mproximitypositive=true")
+                || v.contains("proximitypositive=true")
+                || v.contains("proximity: positive")
+                || v.contains("proximity=positive")) return Boolean.TRUE;
+        if (v.contains("mproximitypositive=false")
+                || v.contains("proximitypositive=false")
+                || v.contains("proximity: negative")
+                || v.contains("proximity=negative")) return Boolean.FALSE;
+        return null;
     }
 
     private boolean isKeyguardLockedShell() {
