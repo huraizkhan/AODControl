@@ -38,6 +38,9 @@ public class AodShellUserService extends IAodShellService.Stub {
     private volatile int engineActiveHeight = 100;
     private volatile int engineEdgeWidth = 20;
     private volatile int engineSensitivity = 70;
+    private volatile boolean engineKeepAlive;
+    private volatile boolean enginePocketProtection = true;
+    private volatile long engineLastKeepAliveAt;
     private volatile int[] engineActions = new int[10];
     private int enginePendingTapCount;
     private long engineLastTapAt;
@@ -257,12 +260,15 @@ public class AodShellUserService extends IAodShellService.Stub {
 
     @Override
     public String configureGestureEngine(boolean enabled, int scope, int activeHeight, int edgeWidth,
-                                         int sensitivity, int[] actions) {
+                                         int sensitivity, boolean keepAlive, boolean pocketProtection, int[] actions) {
         gestureEngineEnabled = enabled;
         engineScope = sanitizeGestureScope(scope);
         engineActiveHeight = clamp(activeHeight, 40, 100);
         engineEdgeWidth = clamp(edgeWidth, 8, 35);
         engineSensitivity = clamp(sensitivity, 1, 100);
+        engineKeepAlive = keepAlive;
+        enginePocketProtection = pocketProtection;
+        engineLastKeepAliveAt = System.currentTimeMillis();
         engineActions = actions == null ? new int[10] : copyActions(actions);
         backgroundStop = false;
         if (enabled) startGestureEngine();
@@ -326,6 +332,24 @@ public class AodShellUserService extends IAodShellService.Stub {
         return "";
     }
 
+    @Override
+    public String nudgeTouchInput() {
+        synchronized (touchLock) {
+            // Reopening the evdev reader is deliberately non-injecting: no fake tap
+            // or swipe is sent to SystemUI. On touch drivers that runtime-suspend
+            // after a few seconds of AOD, a fresh open can bring the input path back
+            // to its listening state without visibly waking the lock screen.
+            stopTouchMonitorLocked();
+            sleepQuiet(18L);
+            return ensureTouchProcessLocked() ? "" : "Touch keep-alive unavailable";
+        }
+    }
+
+    @Override
+    public boolean isPocketCovered() {
+        return isPocketCoveredShell();
+    }
+
     private synchronized void startGestureEngine() {
         if (gestureEngineThread != null && gestureEngineThread.isAlive()) return;
         gestureEngineThread = new Thread(this::gestureEngineLoop, "AODControl-Gestures");
@@ -346,6 +370,18 @@ public class AodShellUserService extends IAodShellService.Stub {
                 sleepQuiet(350L);
                 continue;
             }
+            long now = System.currentTimeMillis();
+            if (engineKeepAlive && gestureScopeIncludesAod()
+                    && now - engineLastKeepAliveAt >= 7500L) {
+                engineLastKeepAliveAt = now;
+                if (!isScreenInteractiveShell()) {
+                    String keepAliveError = nudgeTouchInput();
+                    if (keepAliveError != null && !keepAliveError.isEmpty()) {
+                        backgroundStatus = keepAliveError;
+                    }
+                }
+            }
+
             String payload = waitForTouchEvent(220);
             finalizeRemoteTapIfExpired();
             if (payload == null || payload.isEmpty() || payload.startsWith("ERR:")) {
@@ -355,6 +391,10 @@ public class AodShellUserService extends IAodShellService.Stub {
             // Evaluate scope only after a completed touch so normal idle time
             // does not trigger repeated dumpsys calls.
             if (!gestureScopeAllowsShell()) continue;
+            if (enginePocketProtection && isPocketCoveredShell()) {
+                backgroundStatus = "Shizuku background active • pocket protection";
+                continue;
+            }
             TouchSample sample = TouchSample.parse(payload);
             if (sample == null || !sample.startsInsideActiveHeight(engineActiveHeight)) continue;
             if (sample.isTap(engineSensitivity)) {
@@ -551,6 +591,40 @@ public class AodShellUserService extends IAodShellService.Stub {
         }
         if (engineScope == AppPrefs.GESTURE_SCOPE_AOD_ONLY) return false;
         return isKeyguardLockedShell();
+    }
+
+    private boolean gestureScopeIncludesAod() {
+        return engineScope == AppPrefs.GESTURE_SCOPE_AOD_ONLY
+                || engineScope == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN;
+    }
+
+    private boolean isPocketCoveredShell() {
+        // Android's display/power stack already consumes the proximity sensor for
+        // pocket/doze decisions on supported devices. Reuse that state instead of
+        // starting a second sensor client in the notification-free shell process.
+        String power = run("/system/bin/dumpsys", "power").output;
+        if (proximityPositive(power)) return true;
+        if (proximityNegative(power)) return false;
+        String display = run("/system/bin/dumpsys", "display").output;
+        return proximityPositive(display);
+    }
+
+    private static boolean proximityPositive(String value) {
+        if (value == null) return false;
+        String v = value.toLowerCase(Locale.US);
+        return Pattern.compile("(?:m?proximity(?:sensor)?positive|proximitypositive)\\s*=\\s*true")
+                .matcher(v).find()
+                || v.contains("proximity: positive")
+                || v.contains("proximity=positive");
+    }
+
+    private static boolean proximityNegative(String value) {
+        if (value == null) return false;
+        String v = value.toLowerCase(Locale.US);
+        return Pattern.compile("(?:m?proximity(?:sensor)?positive|proximitypositive)\\s*=\\s*false")
+                .matcher(v).find()
+                || v.contains("proximity: negative")
+                || v.contains("proximity=negative");
     }
 
     private boolean isKeyguardLockedShell() {

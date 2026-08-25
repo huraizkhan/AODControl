@@ -120,7 +120,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         LinearLayout master = card();
         root.addView(master, matchWrap());
 
-        addSwitchRow(master, "Enable AOD gestures",
+        enabledSwitch = addSwitchRow(master, "Enable AOD gestures",
                 "Runs a lightweight Shizuku touch monitor only while this option is enabled.",
                 AppPrefs.isGesturesEnabled(this), checked -> {
                     AppPrefs.setGesturesEnabled(this, checked);
@@ -210,6 +210,23 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         explain.setPadding(dp(18), dp(15), dp(18), dp(8));
         compatibility.addView(explain);
 
+        addDivider(compatibility);
+        addSwitchRow(compatibility, "AOD gesture keep-alive",
+                "Keeps AOD gestures responsive when the touchscreen enters low-power mode. May increase battery usage while AOD is active.",
+                AppPrefs.isGestureKeepAliveEnabled(this), checked -> {
+                    AppPrefs.setGestureKeepAliveEnabled(this, checked);
+                    AodGestureService.sync(this);
+                });
+
+        addDivider(compatibility);
+        addSwitchRow(compatibility, "Pocket protection",
+                "Ignore AOD and lock-screen gestures while the phone is covered/in a pocket to prevent accidental touches.",
+                AppPrefs.isPocketProtectionEnabled(this), checked -> {
+                    AppPrefs.setPocketProtectionEnabled(this, checked);
+                    AodGestureService.sync(this);
+                });
+
+        addDivider(compatibility);
         inputStatus = text("Not checked", 13, colors.text, false);
         inputStatus.setPadding(dp(18), 0, dp(18), dp(9));
         compatibility.addView(inputStatus);
@@ -428,8 +445,8 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         return valueView;
     }
 
-    private void addSwitchRow(LinearLayout parent, String title, String subtitle,
-                              boolean checked, ToggleListener listener) {
+    private Switch addSwitchRow(LinearLayout parent, String title, String subtitle,
+                                boolean checked, ToggleListener listener) {
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -448,7 +465,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         toggle.setOnCheckedChangeListener((buttonView, isChecked) -> listener.onChanged(isChecked));
         row.addView(toggle);
         parent.addView(row, matchWrap());
-        enabledSwitch = toggle;
+        return toggle;
     }
 
     private Button button(String label) {

@@ -124,3 +124,9 @@ Wake AOD, Sleep AOD, and automatic-mode transitions now rebuild the active nativ
 
 ## v1.4.5 gesture scope
 AOD gestures can now be limited to AOD only, the visible lock screen only, or both. Unlocked-screen input remains ignored.
+
+
+## v1.4.6
+- New installs follow the system light/dark appearance by default.
+- Optional AOD gesture keep-alive periodically reopens the Shizuku touch monitor while AOD is active to reduce low-power touchscreen timeouts. This may increase battery usage while AOD is active.
+- Pocket protection is enabled by default and ignores gestures while Android reports the proximity/pocket state as covered.
