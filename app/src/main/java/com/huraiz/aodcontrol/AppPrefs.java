@@ -27,6 +27,7 @@ public final class AppPrefs {
     public static final int GESTURE_ACTION_VOLUME_SLIDER = 8;
     public static final int GESTURE_ACTION_WAKE_AOD = 9;
     public static final int GESTURE_ACTION_SLEEP_AOD = 10;
+    public static final int GESTURE_ACTION_TOGGLE_AOD = 11;
 
     public static final String GESTURE_DOUBLE_TAP = "gesture_double_tap";
     public static final String GESTURE_TRIPLE_TAP = "gesture_triple_tap";
@@ -60,6 +61,7 @@ public final class AppPrefs {
     private static final String KEY_GESTURE_EDGE_WIDTH = "gesture_edge_width_percent";
     private static final String KEY_GESTURE_ACTIVE_HEIGHT = "gesture_active_height_percent";
     private static final String KEY_GESTURE_SENSITIVITY = "gesture_sensitivity_percent";
+    private static final String KEY_FOREGROUND_FALLBACK = "foreground_fallback";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -132,6 +134,14 @@ public final class AppPrefs {
 
     public static void setGestureSensitivityPercent(Context context, int value) {
         prefs(context).edit().putInt(KEY_GESTURE_SENSITIVITY, clamp(value, 1, 100)).apply();
+    }
+
+    public static boolean isForegroundFallbackEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_FOREGROUND_FALLBACK, false);
+    }
+
+    public static void setForegroundFallbackEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_FOREGROUND_FALLBACK, enabled).apply();
     }
 
     public static int getGestureAction(Context context, String gesture) {
@@ -237,6 +247,7 @@ public final class AppPrefs {
             case GESTURE_ACTION_VOLUME_SLIDER: return "Volume slider";
             case GESTURE_ACTION_WAKE_AOD: return "Wake AOD";
             case GESTURE_ACTION_SLEEP_AOD: return "Sleep AOD";
+            case GESTURE_ACTION_TOGGLE_AOD: return "Toggle AOD";
             default: return "No action";
         }
     }
@@ -250,7 +261,8 @@ public final class AppPrefs {
     private static int sanitizeGestureAction(int action, boolean edgeGesture) {
         if (action >= GESTURE_ACTION_TORCH && action <= GESTURE_ACTION_WAKE_SCREEN) return action;
         if (edgeGesture && action == GESTURE_ACTION_VOLUME_SLIDER) return action;
-        if (action == GESTURE_ACTION_WAKE_AOD || action == GESTURE_ACTION_SLEEP_AOD) return action;
+        if (action == GESTURE_ACTION_WAKE_AOD || action == GESTURE_ACTION_SLEEP_AOD
+                || action == GESTURE_ACTION_TOGGLE_AOD) return action;
         return GESTURE_ACTION_NONE;
     }
 

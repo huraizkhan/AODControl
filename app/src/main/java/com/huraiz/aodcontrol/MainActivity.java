@@ -293,7 +293,7 @@ public class MainActivity extends Activity implements ShizukuBridge.Listener {
 
     private void onConfigurationChangedByUser() {
         if (AppPrefs.anyAutomationEnabled(this)) {
-            requestNotificationPermissionIfNeeded();
+            if (AppPrefs.isForegroundFallbackEnabled(this)) requestNotificationPermissionIfNeeded();
             AutomationService.refresh(this);
         } else {
             AutomationService.sync(this);

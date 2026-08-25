@@ -114,3 +114,9 @@ app/build/outputs/apk/debug/app-debug.apk
 ## v1.4.3 live native-AOD refresh
 
 Wake AOD, Sleep AOD, and automatic-mode transitions now rebuild the active native Doze/AOD session with a very short Shizuku power-state pulse after changing the scrim. This is intended for devices such as Pixel where SystemUI caches the scrim for the lifetime of the current Doze session.
+
+## v1.4.4
+
+- Added **Toggle AOD** gesture action (visible native AOD ↔ AOFP blank AOD).
+- Default background engine is now a persistent Shizuku UserService, so enabled gestures and automatic AOD modes do not require a permanent AODControl notification.
+- General → Background engine includes **Foreground fallback** for OEMs that do not keep the Shizuku UserService alive. Fallback mode uses one compact **AODControl active** notification.

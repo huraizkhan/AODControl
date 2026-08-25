@@ -19,7 +19,7 @@ public final class ShizukuBridge {
     }
 
     public static final int REQUEST_CODE = 4017;
-    private static final int USER_SERVICE_VERSION = 4;
+    private static final int USER_SERVICE_VERSION = 5;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();
@@ -124,7 +124,7 @@ public final class ShizukuBridge {
                 ComponentName component = new ComponentName(
                         appContext.getPackageName(), AodShellUserService.class.getName());
                 userServiceArgs = new Shizuku.UserServiceArgs(component)
-                        .daemon(false)
+                        .daemon(true)
                         .processNameSuffix("aod_shell")
                         .debuggable(false)
                         .version(USER_SERVICE_VERSION);
@@ -162,6 +162,9 @@ public final class ShizukuBridge {
             binding = false;
             if (binder != null && binder.pingBinder()) {
                 service = IAodShellService.Stub.asInterface(binder);
+                if (appContext != null && !AppPrefs.isForegroundFallbackEnabled(appContext)) {
+                    ShizukuBackgroundEngine.sync(appContext);
+                }
             } else {
                 service = null;
             }

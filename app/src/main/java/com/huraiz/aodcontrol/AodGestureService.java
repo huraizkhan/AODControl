@@ -26,8 +26,8 @@ import java.util.concurrent.Executors;
 
 public final class AodGestureService extends Service implements ShizukuBridge.Listener {
     public static final String ACTION_REFRESH = "com.huraiz.aodcontrol.action.REFRESH_GESTURES";
-    private static final String CHANNEL_ID = "aod_gestures";
-    private static final int NOTIFICATION_ID = 1041;
+    private static final String CHANNEL_ID = "aod_active";
+    private static final int NOTIFICATION_ID = 1030;
 
     private static volatile boolean running;
     private static volatile String monitorStatus = "Stopped";
@@ -242,6 +242,8 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
                 return setAodVisible(true);
             case AppPrefs.GESTURE_ACTION_SLEEP_AOD:
                 return setAodVisible(false);
+            case AppPrefs.GESTURE_ACTION_TOGGLE_AOD:
+                return toggleAod();
             default:
                 return null;
         }
@@ -285,6 +287,30 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             return true;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    private String toggleAod() {
+        IAodShellService shell = ShizukuBridge.getService();
+        if (shell == null) return "AOD action needs Shizuku";
+        try {
+            String constants = shell.getSetting("global", AodSettings.AOD_CONSTANTS);
+            String value = AodSettings.getValue(constants, AodSettings.DIMMING_KEY);
+            boolean blank = true;
+            if (value == null || value.isEmpty()) blank = false;
+            else {
+                String[] parts = value.split(":");
+                if (parts.length < 2) blank = false;
+                else {
+                    for (String part : parts) {
+                        try { if (Integer.parseInt(part.trim()) < 250) { blank = false; break; } }
+                        catch (Throwable ignored) { blank = false; break; }
+                    }
+                }
+            }
+            return setAodVisible(blank);
+        } catch (Throwable t) {
+            return "AOD action failed";
         }
     }
 
@@ -362,12 +388,19 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
     public static String statusText(Context context) {
         if (!AppPrefs.isGesturesEnabled(context)) return "Disabled";
         if (!AppPrefs.anyGestureActionConfigured(context)) return "Enabled • choose at least one gesture action";
+        if (!AppPrefs.isForegroundFallbackEnabled(context)) return ShizukuBackgroundEngine.status(context);
         if (!ShizukuBridge.isReady()) return "Waiting for Shizuku";
         return monitorStatus == null || monitorStatus.isEmpty() ? "Starting…" : monitorStatus;
     }
 
     public static void sync(Context context) {
         Context app = context.getApplicationContext();
+        if (!AppPrefs.isForegroundFallbackEnabled(app)) {
+            try { app.stopService(new Intent(app, AodGestureService.class)); } catch (Throwable ignored) {}
+            ShizukuBackgroundEngine.sync(app);
+            return;
+        }
+        ShizukuBackgroundEngine.stop();
         if (shouldRun(app)) {
             Intent intent = new Intent(app, AodGestureService.class).setAction(ACTION_REFRESH);
             try {
@@ -384,8 +417,8 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "AOD gestures", NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("Runs only while AOD gestures are enabled");
+                CHANNEL_ID, "AODControl active", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Shown only when foreground fallback mode is enabled");
         channel.setShowBadge(false);
         nm.createNotificationChannel(channel);
     }
@@ -397,8 +430,7 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
         Notification.Builder b = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(this, CHANNEL_ID) : new Notification.Builder(this);
         return b.setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                .setContentTitle("AODControl • Gestures")
-                .setContentText(text)
+                .setContentTitle("AODControl active")
                 .setOnlyAlertOnce(true)
                 .setOngoing(true)
                 .setContentIntent(content)

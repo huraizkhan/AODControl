@@ -123,7 +123,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 "Runs a lightweight Shizuku touch monitor only while this option is enabled.",
                 AppPrefs.isGesturesEnabled(this), checked -> {
                     AppPrefs.setGesturesEnabled(this, checked);
-                    if (checked) requestNotificationPermissionIfNeeded();
+                    if (checked && AppPrefs.isForegroundFallbackEnabled(this)) requestNotificationPermissionIfNeeded();
                     AodGestureService.sync(this);
                     refreshAll();
                 });
@@ -147,6 +147,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 "Centered vertical area where gestures may start.",
                 40, 100, AppPrefs.getGestureActiveHeightPercent(this), value -> {
                     AppPrefs.setGestureActiveHeightPercent(this, value);
+                    AodGestureService.sync(this);
                     if (activeHeightValue != null) activeHeightValue.setText(value + "%");
                     if (gesturePreview != null) gesturePreview.invalidate();
                 });
@@ -155,6 +156,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 "Width of the left/right edge slide zones.",
                 8, 35, AppPrefs.getGestureEdgeWidthPercent(this), value -> {
                     AppPrefs.setGestureEdgeWidthPercent(this, value);
+                    AodGestureService.sync(this);
                     if (edgeWidthValue != null) edgeWidthValue.setText(value + "%");
                     if (gesturePreview != null) gesturePreview.invalidate();
                 });
@@ -163,6 +165,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 "Higher values accept shorter and less perfectly straight swipes.",
                 1, 100, AppPrefs.getGestureSensitivityPercent(this), value -> {
                     AppPrefs.setGestureSensitivityPercent(this, value);
+                    AodGestureService.sync(this);
                     if (sensitivityValue != null) sensitivityValue.setText(value + "%");
                 });
 
@@ -246,13 +249,13 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 AppPrefs.GESTURE_ACTION_TORCH, AppPrefs.GESTURE_ACTION_PLAY_PAUSE,
                 AppPrefs.GESTURE_ACTION_NEXT_TRACK, AppPrefs.GESTURE_ACTION_PREVIOUS_TRACK,
                 AppPrefs.GESTURE_ACTION_VOLUME_UP, AppPrefs.GESTURE_ACTION_VOLUME_DOWN,
-                AppPrefs.GESTURE_ACTION_WAKE_AOD, AppPrefs.GESTURE_ACTION_SLEEP_AOD,
+                AppPrefs.GESTURE_ACTION_TOGGLE_AOD, AppPrefs.GESTURE_ACTION_WAKE_AOD, AppPrefs.GESTURE_ACTION_SLEEP_AOD,
                 AppPrefs.GESTURE_ACTION_WAKE_SCREEN}
                 : new int[] {AppPrefs.GESTURE_ACTION_NONE, AppPrefs.GESTURE_ACTION_TORCH,
                 AppPrefs.GESTURE_ACTION_PLAY_PAUSE, AppPrefs.GESTURE_ACTION_NEXT_TRACK,
                 AppPrefs.GESTURE_ACTION_PREVIOUS_TRACK, AppPrefs.GESTURE_ACTION_VOLUME_UP,
-                AppPrefs.GESTURE_ACTION_VOLUME_DOWN, AppPrefs.GESTURE_ACTION_WAKE_AOD,
-                AppPrefs.GESTURE_ACTION_SLEEP_AOD, AppPrefs.GESTURE_ACTION_WAKE_SCREEN};
+                AppPrefs.GESTURE_ACTION_VOLUME_DOWN, AppPrefs.GESTURE_ACTION_TOGGLE_AOD,
+                AppPrefs.GESTURE_ACTION_WAKE_AOD, AppPrefs.GESTURE_ACTION_SLEEP_AOD, AppPrefs.GESTURE_ACTION_WAKE_SCREEN};
 
         String[] labels = new String[ids.length];
         int current = AppPrefs.getGestureAction(this, gesture);
@@ -313,7 +316,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     private void refreshStatus() {
         if (serviceStatus != null) {
             String status = AodGestureService.statusText(this);
-            if (AodGestureService.isRunning()) status += " • service running";
+            if (AppPrefs.isForegroundFallbackEnabled(this) && AodGestureService.isRunning()) status += " • foreground service";
             serviceStatus.setText(status);
         }
     }

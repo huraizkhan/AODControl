@@ -84,6 +84,25 @@ public class SettingsActivity extends Activity {
                 });
 
         addGap(root, 22);
+        root.addView(section("⚙  Background engine"));
+        LinearLayout background = card();
+        addSwitchRow(background, "Foreground fallback",
+                "Off: Shizuku background with no persistent notification. On: Android foreground service with one compact AODControl active notification.",
+                AppPrefs.isForegroundFallbackEnabled(this), true,
+                checked -> {
+                    AppPrefs.setForegroundFallbackEnabled(this, checked);
+                    if (checked) ShizukuBackgroundEngine.stop();
+                    AodGestureService.sync(this);
+                    AutomationService.sync(this);
+                });
+        addDivider(background);
+        background.addView(rowText("Current engine",
+                AppPrefs.isForegroundFallbackEnabled(this)
+                        ? "Foreground fallback • compact notification"
+                        : "Shizuku background • no persistent notification"));
+        root.addView(background, matchWrap());
+
+        addGap(root, 22);
         root.addView(section("↕  AOD interaction"));
         LinearLayout gestures = card();
         TextView gestureTitle = text("AOD gestures", 17, colors.text, false);
@@ -109,7 +128,7 @@ public class SettingsActivity extends Activity {
         addGap(root, 22);
         root.addView(section("ⓘ  About"));
         LinearLayout about = card();
-        about.addView(rowText("AODControl", "Version 1.4.0"));
+        about.addView(rowText("AODControl", "Version 1.4.4"));
         addDivider(about);
         about.addView(rowText("Device", Build.MANUFACTURER + " " + Build.MODEL));
         addDivider(about);

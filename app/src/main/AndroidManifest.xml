@@ -73,6 +73,15 @@
 
 
         <receiver
+            android:name=".GestureActionReceiver"
+            android:exported="true"
+            android:permission="android.permission.DUMP">
+            <intent-filter>
+                <action android:name="com.huraiz.aodcontrol.GESTURE_ACTION" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".BootReceiver"
             android:enabled="true"
             android:exported="false">

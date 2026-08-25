@@ -24,8 +24,8 @@ import java.util.concurrent.Executors;
 public class AutomationService extends Service implements ShizukuBridge.Listener {
     private static volatile boolean running;
     public static final String ACTION_REFRESH = "com.huraiz.aodcontrol.action.REFRESH_AUTOMATION";
-    private static final String CHANNEL_ID = "aod_automation";
-    private static final int NOTIFICATION_ID = 1031;
+    private static final String CHANNEL_ID = "aod_active";
+    private static final int NOTIFICATION_ID = 1030;
 
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -253,18 +253,25 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
     }
 
     public static void sync(Context context) {
-        if (AppPrefs.anyAutomationEnabled(context)) {
-            Intent intent = new Intent(context, AutomationService.class);
+        Context app = context.getApplicationContext();
+        if (!AppPrefs.isForegroundFallbackEnabled(app)) {
+            try { app.stopService(new Intent(app, AutomationService.class)); } catch (Throwable ignored) {}
+            ShizukuBackgroundEngine.sync(app);
+            return;
+        }
+        ShizukuBackgroundEngine.stop();
+        if (AppPrefs.anyAutomationEnabled(app)) {
+            Intent intent = new Intent(app, AutomationService.class);
             intent.setAction(ACTION_REFRESH);
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent);
+                    app.startForegroundService(intent);
                 } else {
-                    context.startService(intent);
+                    app.startService(intent);
                 }
             } catch (Throwable ignored) {}
         } else {
-            try { context.stopService(new Intent(context, AutomationService.class)); } catch (Throwable ignored) {}
+            try { app.stopService(new Intent(app, AutomationService.class)); } catch (Throwable ignored) {}
         }
     }
 
@@ -277,8 +284,8 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
         NotificationManager nm = getSystemService(NotificationManager.class);
         if (nm == null) return;
         NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID, "AOD automation", NotificationManager.IMPORTANCE_LOW);
-        channel.setDescription("Shows while automatic AOD modes are enabled");
+                CHANNEL_ID, "AODControl active", NotificationManager.IMPORTANCE_LOW);
+        channel.setDescription("Shown only when foreground fallback mode is enabled");
         channel.setShowBadge(false);
         nm.createNotificationChannel(channel);
     }
@@ -291,8 +298,7 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
                 ? new Notification.Builder(this, CHANNEL_ID)
                 : new Notification.Builder(this);
         return b.setSmallIcon(android.R.drawable.ic_lock_idle_lock)
-                .setContentTitle("AOD Control")
-                .setContentText(text)
+                .setContentTitle("AODControl active")
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setContentIntent(content)
