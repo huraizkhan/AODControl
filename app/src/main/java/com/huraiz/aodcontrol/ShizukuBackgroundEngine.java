@@ -40,6 +40,7 @@ public final class ShizukuBackgroundEngine {
             };
             shell.configureGestureEngine(
                     AppPrefs.isGesturesEnabled(context) && AppPrefs.anyGestureActionConfigured(context),
+                    AppPrefs.getGestureScope(context),
                     AppPrefs.getGestureActiveHeightPercent(context),
                     AppPrefs.getGestureEdgeWidthPercent(context),
                     AppPrefs.getGestureSensitivityPercent(context),

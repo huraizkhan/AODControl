@@ -42,6 +42,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     private TextView edgeWidthValue;
     private TextView activeHeightValue;
     private TextView sensitivityValue;
+    private TextView scopeValue;
     private GestureZonePreviewView gesturePreview;
     private final Map<String, TextView> actionLabels = new LinkedHashMap<>();
 
@@ -129,6 +130,12 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 });
 
         addDivider(master);
+        scopeValue = addChoiceRow(master, "Gesture scope",
+                "Choose whether configured gestures work on AOD, the visible lock screen, or both.",
+                AppPrefs.gestureScopeLabel(AppPrefs.getGestureScope(this)),
+                this::showScopePicker);
+
+        addDivider(master);
         serviceStatus = text("", 13, colors.accent, true);
         serviceStatus.setPadding(dp(18), dp(13), dp(18), dp(13));
         master.addView(serviceStatus);
@@ -199,7 +206,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         LinearLayout compatibility = card();
         root.addView(compatibility, matchWrap());
 
-        TextView explain = text("AODControl observes the touchscreen through Shizuku's shell identity. It does not inject touches or intercept normal screen-on input.", 13, colors.muted, false);
+        TextView explain = text("AODControl observes the touchscreen through Shizuku's shell identity. Lock-screen scope works only while the phone is still locked; normal unlocked-screen touches are ignored.", 13, colors.muted, false);
         explain.setPadding(dp(18), dp(15), dp(18), dp(8));
         compatibility.addView(explain);
 
@@ -213,7 +220,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         compatibility.addView(check, checkLp);
         check.setOnClickListener(v -> checkTouchInput());
 
-        TextView note = text("Gestures are acted on only while Android reports the screen as non-interactive (native AOD / screen-off). Some OEMs stop reporting touchscreen events once the panel fully sleeps; those devices will show Touch input unavailable.", 11, colors.muted, false);
+        TextView note = text("AOD scope listens while the display is non-interactive. Lock-screen scope listens while the display is on and keyguard is still locked. Some OEMs may consume the same lock-screen gesture too, because AODControl observes input rather than blocking SystemUI.", 11, colors.muted, false);
         note.setPadding(dp(8), dp(18), dp(8), 0);
         root.addView(note);
 
@@ -282,6 +289,50 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 .show();
     }
 
+    private void showScopePicker() {
+        int[] values = new int[] {
+                AppPrefs.GESTURE_SCOPE_AOD_ONLY,
+                AppPrefs.GESTURE_SCOPE_LOCK_SCREEN_ONLY,
+                AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN
+        };
+        String[] labels = new String[] {"AOD only", "Lock screen only", "AOD + lock screen"};
+        int current = AppPrefs.getGestureScope(this);
+        int checked = current == AppPrefs.GESTURE_SCOPE_LOCK_SCREEN_ONLY ? 1
+                : current == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN ? 2 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle("Gesture scope")
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    AppPrefs.setGestureScope(this, values[which]);
+                    AodGestureService.sync(this);
+                    refreshAll();
+                    dialog.dismiss();
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private TextView addChoiceRow(LinearLayout parent, String title, String subtitle,
+                                  String value, Runnable onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(18), dp(14), dp(14), dp(14));
+
+        LinearLayout copy = vertical();
+        copy.addView(text(title, 16, colors.text, false));
+        TextView sub = text(subtitle, 12, colors.muted, false);
+        sub.setPadding(0, dp(3), dp(8), 0);
+        copy.addView(sub);
+        row.addView(copy, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView valueView = text(value, 13, colors.accent, true);
+        valueView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        row.addView(valueView, new LinearLayout.LayoutParams(dp(145), LinearLayout.LayoutParams.WRAP_CONTENT));
+        row.setOnClickListener(v -> onClick.run());
+        parent.addView(row, matchWrap());
+        return valueView;
+    }
+
     private void checkTouchInput() {
         if (!ShizukuBridge.isReady()) {
             toast("Start Shizuku and grant AODControl access first");
@@ -309,6 +360,7 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         if (activeHeightValue != null) activeHeightValue.setText(AppPrefs.getGestureActiveHeightPercent(this) + "%");
         if (edgeWidthValue != null) edgeWidthValue.setText(AppPrefs.getGestureEdgeWidthPercent(this) + "%");
         if (sensitivityValue != null) sensitivityValue.setText(AppPrefs.getGestureSensitivityPercent(this) + "%");
+        if (scopeValue != null) scopeValue.setText(AppPrefs.gestureScopeLabel(AppPrefs.getGestureScope(this)));
         if (gesturePreview != null) gesturePreview.invalidate();
         refreshStatus();
     }

@@ -13,7 +13,7 @@ interface IAodShellService {
     String wakeScreen() = 10;
     String dispatchMediaKey(int keyCode) = 11;
     String refreshNativeAod() = 12;
-    String configureGestureEngine(boolean enabled, int activeHeight, int edgeWidth, int sensitivity, in int[] actions) = 13;
+    String configureGestureEngine(boolean enabled, int scope, int activeHeight, int edgeWidth, int sensitivity, in int[] actions) = 13;
     String configureAutomationEngine(boolean enabled,
             int defaultBehavior, int defaultOpacity,
             boolean chargingEnabled, int chargingBehavior, int chargingOpacity,

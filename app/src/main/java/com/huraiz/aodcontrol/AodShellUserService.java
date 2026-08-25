@@ -34,6 +34,7 @@ public class AodShellUserService extends IAodShellService.Stub {
     private Thread gestureEngineThread;
     private Thread automationEngineThread;
 
+    private volatile int engineScope = AppPrefs.GESTURE_SCOPE_AOD_ONLY;
     private volatile int engineActiveHeight = 100;
     private volatile int engineEdgeWidth = 20;
     private volatile int engineSensitivity = 70;
@@ -255,9 +256,10 @@ public class AodShellUserService extends IAodShellService.Stub {
     }
 
     @Override
-    public String configureGestureEngine(boolean enabled, int activeHeight, int edgeWidth,
+    public String configureGestureEngine(boolean enabled, int scope, int activeHeight, int edgeWidth,
                                          int sensitivity, int[] actions) {
         gestureEngineEnabled = enabled;
+        engineScope = sanitizeGestureScope(scope);
         engineActiveHeight = clamp(activeHeight, 40, 100);
         engineEdgeWidth = clamp(edgeWidth, 8, 35);
         engineSensitivity = clamp(sensitivity, 1, 100);
@@ -350,9 +352,9 @@ public class AodShellUserService extends IAodShellService.Stub {
                 if (payload != null && payload.startsWith("ERR:")) backgroundStatus = payload.substring(4);
                 continue;
             }
-            // Only evaluate power state after a completed touch. This avoids
-            // repeated dumpsys calls while the phone is idle or being used normally.
-            if (isScreenInteractiveShell()) continue;
+            // Evaluate scope only after a completed touch so normal idle time
+            // does not trigger repeated dumpsys calls.
+            if (!gestureScopeAllowsShell()) continue;
             TouchSample sample = TouchSample.parse(payload);
             if (sample == null || !sample.startsInsideActiveHeight(engineActiveHeight)) continue;
             if (sample.isTap(engineSensitivity)) {
@@ -539,6 +541,37 @@ public class AodShellUserService extends IAodShellService.Stub {
         if (v.contains("mWakefulness=Awake") || v.contains("mInteractive=true")) return true;
         if (v.contains("mWakefulness=Dozing") || v.contains("mWakefulness=Asleep") || v.contains("mInteractive=false")) return false;
         return false;
+    }
+
+    private boolean gestureScopeAllowsShell() {
+        boolean interactive = isScreenInteractiveShell();
+        if (!interactive) {
+            return engineScope == AppPrefs.GESTURE_SCOPE_AOD_ONLY
+                    || engineScope == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN;
+        }
+        if (engineScope == AppPrefs.GESTURE_SCOPE_AOD_ONLY) return false;
+        return isKeyguardLockedShell();
+    }
+
+    private boolean isKeyguardLockedShell() {
+        CommandResult policy = run("/system/bin/dumpsys", "window", "policy");
+        String v = policy.output.toLowerCase(Locale.US);
+        if (v.contains("mshowinglockscreen=true")
+                || v.contains("mkeyguardshowing=true")
+                || v.contains("isstatusbarkeyguard=true")
+                || v.contains("keyguardshowing=true")
+                || (v.contains("showing=true") && v.contains("keyguard"))) {
+            return true;
+        }
+        CommandResult trust = run("/system/bin/dumpsys", "trust");
+        String t = trust.output.toLowerCase(Locale.US);
+        return t.contains("devicelocked=true") || t.contains("device locked: true");
+    }
+
+    private static int sanitizeGestureScope(int scope) {
+        if (scope == AppPrefs.GESTURE_SCOPE_LOCK_SCREEN_ONLY
+                || scope == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN) return scope;
+        return AppPrefs.GESTURE_SCOPE_AOD_ONLY;
     }
 
     private static boolean inRange(int now, int start, int end) {

@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.KeyguardManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
@@ -147,7 +148,8 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
                 setStatus("Monitoring native AOD touch");
             }
 
-            boolean ambientAtStart = !isScreenInteractive();
+            boolean interactiveAtStart = isScreenInteractive();
+            boolean lockedAtStart = isKeyguardLocked();
             String payload;
             try {
                 payload = shell.waitForTouchEvent(1500);
@@ -167,8 +169,10 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
 
             TouchSample sample = TouchSample.parse(payload);
             if (sample == null) continue;
-            boolean sequenceStartedOnAod = ambientAtStart || !isScreenInteractive() || pendingTapCount > 0;
-            if (!sequenceStartedOnAod) continue;
+            boolean interactiveNow = isScreenInteractive();
+            boolean lockedNow = isKeyguardLocked();
+            if (!gestureScopeAllows(interactiveAtStart, lockedAtStart, interactiveNow, lockedNow)
+                    && pendingTapCount == 0) continue;
 
             int activeHeight = AppPrefs.getGestureActiveHeightPercent(this);
             if (!sample.startsInsideActiveHeight(activeHeight)) continue;
@@ -372,6 +376,21 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
     private boolean isScreenInteractive() {
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
         return pm != null && pm.isInteractive();
+    }
+
+    private boolean isKeyguardLocked() {
+        KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
+        return km != null && km.isKeyguardLocked();
+    }
+
+    private boolean gestureScopeAllows(boolean interactiveAtStart, boolean lockedAtStart,
+                                       boolean interactiveNow, boolean lockedNow) {
+        int scope = AppPrefs.getGestureScope(this);
+        boolean aod = !interactiveAtStart || !interactiveNow;
+        boolean lockScreen = (interactiveAtStart && lockedAtStart) || (interactiveNow && lockedNow);
+        if (scope == AppPrefs.GESTURE_SCOPE_LOCK_SCREEN_ONLY) return lockScreen;
+        if (scope == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN) return aod || lockScreen;
+        return aod;
     }
 
     private void setStatus(String value) {

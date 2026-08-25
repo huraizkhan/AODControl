@@ -120,3 +120,7 @@ Wake AOD, Sleep AOD, and automatic-mode transitions now rebuild the active nativ
 - Added **Toggle AOD** gesture action (visible native AOD ↔ AOFP blank AOD).
 - Default background engine is now a persistent Shizuku UserService, so enabled gestures and automatic AOD modes do not require a permanent AODControl notification.
 - General → Background engine includes **Foreground fallback** for OEMs that do not keep the Shizuku UserService alive. Fallback mode uses one compact **AODControl active** notification.
+
+
+## v1.4.5 gesture scope
+AOD gestures can now be limited to AOD only, the visible lock screen only, or both. Unlocked-screen input remains ignored.

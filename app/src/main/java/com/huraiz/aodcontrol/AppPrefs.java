@@ -29,6 +29,10 @@ public final class AppPrefs {
     public static final int GESTURE_ACTION_SLEEP_AOD = 10;
     public static final int GESTURE_ACTION_TOGGLE_AOD = 11;
 
+    public static final int GESTURE_SCOPE_AOD_ONLY = 0;
+    public static final int GESTURE_SCOPE_LOCK_SCREEN_ONLY = 1;
+    public static final int GESTURE_SCOPE_AOD_AND_LOCK_SCREEN = 2;
+
     public static final String GESTURE_DOUBLE_TAP = "gesture_double_tap";
     public static final String GESTURE_TRIPLE_TAP = "gesture_triple_tap";
     public static final String GESTURE_SWIPE_LEFT_TO_RIGHT = "gesture_swipe_left_to_right";
@@ -61,6 +65,7 @@ public final class AppPrefs {
     private static final String KEY_GESTURE_EDGE_WIDTH = "gesture_edge_width_percent";
     private static final String KEY_GESTURE_ACTIVE_HEIGHT = "gesture_active_height_percent";
     private static final String KEY_GESTURE_SENSITIVITY = "gesture_sensitivity_percent";
+    private static final String KEY_GESTURE_SCOPE = "gesture_scope";
     private static final String KEY_FOREGROUND_FALLBACK = "foreground_fallback";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
@@ -134,6 +139,25 @@ public final class AppPrefs {
 
     public static void setGestureSensitivityPercent(Context context, int value) {
         prefs(context).edit().putInt(KEY_GESTURE_SENSITIVITY, clamp(value, 1, 100)).apply();
+    }
+
+    public static int getGestureScope(Context context) {
+        int value = prefs(context).getInt(KEY_GESTURE_SCOPE, GESTURE_SCOPE_AOD_ONLY);
+        if (value == GESTURE_SCOPE_LOCK_SCREEN_ONLY || value == GESTURE_SCOPE_AOD_AND_LOCK_SCREEN) return value;
+        return GESTURE_SCOPE_AOD_ONLY;
+    }
+
+    public static void setGestureScope(Context context, int value) {
+        if (value != GESTURE_SCOPE_LOCK_SCREEN_ONLY && value != GESTURE_SCOPE_AOD_AND_LOCK_SCREEN) {
+            value = GESTURE_SCOPE_AOD_ONLY;
+        }
+        prefs(context).edit().putInt(KEY_GESTURE_SCOPE, value).apply();
+    }
+
+    public static String gestureScopeLabel(int scope) {
+        if (scope == GESTURE_SCOPE_LOCK_SCREEN_ONLY) return "Lock screen only";
+        if (scope == GESTURE_SCOPE_AOD_AND_LOCK_SCREEN) return "AOD + lock screen";
+        return "AOD only";
     }
 
     public static boolean isForegroundFallbackEnabled(Context context) {
