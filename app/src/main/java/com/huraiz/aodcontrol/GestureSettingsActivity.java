@@ -129,13 +129,23 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         master.addView(serviceStatus);
 
         addGap(root, 22);
+        root.addView(section("▣  Gesture zones"));
+        LinearLayout previewCard = card();
+        root.addView(previewCard, matchWrap());
+        GestureZonePreviewView preview = new GestureZonePreviewView(this);
+        LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(360));
+        previewLp.setMargins(dp(8), dp(8), dp(8), dp(8));
+        previewCard.addView(preview, previewLp);
+
+        addGap(root, 22);
         root.addView(section("↕  Gestures"));
         LinearLayout gestureCard = card();
         root.addView(gestureCard, matchWrap());
 
-        addGestureRow(gestureCard, AppPrefs.GESTURE_DOUBLE_TAP, "Double tap", "Two quick taps on AOD", false);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_DOUBLE_TAP, "Double tap", "Two quick taps anywhere on AOD", false);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_TRIPLE_TAP, "Triple tap", "Three quick taps on AOD", false);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_TRIPLE_TAP, "Triple tap", "Three quick taps anywhere on AOD", false);
         addDivider(gestureCard);
         addGestureRow(gestureCard, AppPrefs.GESTURE_SWIPE_LEFT_TO_RIGHT, "Swipe left → right", "Horizontal swipe across AOD", false);
         addDivider(gestureCard);
@@ -145,9 +155,13 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         addDivider(gestureCard);
         addGestureRow(gestureCard, AppPrefs.GESTURE_SWIPE_DOWN, "Swipe down", "Vertical swipe downward", false);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_SLIDE, "Left-edge slide", "Slide vertically near the left edge", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_UP, "Left edge ↑", "Slide upward in the outer-left 20%", true);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_SLIDE, "Right-edge slide", "Slide vertically near the right edge", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_DOWN, "Left edge ↓", "Slide downward in the outer-left 20%", true);
+        addDivider(gestureCard);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_UP, "Right edge ↑", "Slide upward in the outer-right 20%", true);
+        addDivider(gestureCard);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_DOWN, "Right edge ↓", "Slide downward in the outer-right 20%", true);
 
         addGap(root, 22);
         root.addView(section("◇  Touch compatibility"));
@@ -204,11 +218,13 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 AppPrefs.GESTURE_ACTION_TORCH, AppPrefs.GESTURE_ACTION_PLAY_PAUSE,
                 AppPrefs.GESTURE_ACTION_NEXT_TRACK, AppPrefs.GESTURE_ACTION_PREVIOUS_TRACK,
                 AppPrefs.GESTURE_ACTION_VOLUME_UP, AppPrefs.GESTURE_ACTION_VOLUME_DOWN,
+                AppPrefs.GESTURE_ACTION_WAKE_AOD, AppPrefs.GESTURE_ACTION_SLEEP_AOD,
                 AppPrefs.GESTURE_ACTION_WAKE_SCREEN}
                 : new int[] {AppPrefs.GESTURE_ACTION_NONE, AppPrefs.GESTURE_ACTION_TORCH,
                 AppPrefs.GESTURE_ACTION_PLAY_PAUSE, AppPrefs.GESTURE_ACTION_NEXT_TRACK,
                 AppPrefs.GESTURE_ACTION_PREVIOUS_TRACK, AppPrefs.GESTURE_ACTION_VOLUME_UP,
-                AppPrefs.GESTURE_ACTION_VOLUME_DOWN, AppPrefs.GESTURE_ACTION_WAKE_SCREEN};
+                AppPrefs.GESTURE_ACTION_VOLUME_DOWN, AppPrefs.GESTURE_ACTION_WAKE_AOD,
+                AppPrefs.GESTURE_ACTION_SLEEP_AOD, AppPrefs.GESTURE_ACTION_WAKE_SCREEN};
 
         String[] labels = new String[ids.length];
         int current = AppPrefs.getGestureAction(this, gesture);

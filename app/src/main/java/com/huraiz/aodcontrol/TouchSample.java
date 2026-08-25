@@ -53,15 +53,24 @@ final class TouchSample {
         float ax = Math.abs(dx);
         float ay = Math.abs(dy);
 
-        boolean vertical = ay >= maxY * 0.11f && ay > ax * 1.35f;
-        if (vertical && startX <= maxX * 0.17f) return AppPrefs.GESTURE_LEFT_EDGE_SLIDE;
-        if (vertical && startX >= maxX * 0.83f) return AppPrefs.GESTURE_RIGHT_EDGE_SLIDE;
+        // Edge zones intentionally occupy 20% of either side so they are easy to
+        // hit on dim native-AOD screens. Direction is part of the gesture key.
+        boolean edgeVertical = ay >= maxY * 0.08f && ay > ax * 1.15f;
+        if (edgeVertical && startX <= maxX * 0.20f) {
+            return dy < 0 ? AppPrefs.GESTURE_LEFT_EDGE_UP : AppPrefs.GESTURE_LEFT_EDGE_DOWN;
+        }
+        if (edgeVertical && startX >= maxX * 0.80f) {
+            return dy < 0 ? AppPrefs.GESTURE_RIGHT_EDGE_UP : AppPrefs.GESTURE_RIGHT_EDGE_DOWN;
+        }
 
-        if (ax >= maxX * 0.20f && ax > ay * 1.25f) {
+        // Horizontal swipes are deliberately more forgiving than v1.4.0. This
+        // helps track-change gestures register even when the finger path is not
+        // perfectly straight on AOD.
+        if (ax >= maxX * 0.12f && ax > ay * 1.10f) {
             return dx > 0 ? AppPrefs.GESTURE_SWIPE_LEFT_TO_RIGHT
                     : AppPrefs.GESTURE_SWIPE_RIGHT_TO_LEFT;
         }
-        if (ay >= maxY * 0.17f && ay > ax * 1.25f) {
+        if (ay >= maxY * 0.12f && ay > ax * 1.10f) {
             return dy < 0 ? AppPrefs.GESTURE_SWIPE_UP : AppPrefs.GESTURE_SWIPE_DOWN;
         }
         return null;

@@ -94,3 +94,12 @@ APK:
 ```text
 app/build/outputs/apk/debug/app-debug.apk
 ```
+
+
+## v1.4.1 gesture refinements
+
+- Adds a visual gesture-zone preview.
+- Splits left/right edge slides into separate up and down gestures.
+- Makes horizontal swipe detection more forgiving.
+- Sends play/pause/next/previous media keys through the restricted Shizuku shell path first, with AudioManager fallback.
+- Adds Wake AOD and Sleep AOD actions. These change the native AOD scrim between visible and fully black without intentionally waking the lock screen.

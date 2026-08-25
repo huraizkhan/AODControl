@@ -213,14 +213,14 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             case AppPrefs.GESTURE_ACTION_TORCH:
                 return toggleTorch();
             case AppPrefs.GESTURE_ACTION_PLAY_PAUSE:
-                dispatchMedia(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
-                return "Last action • Play / pause";
+                return dispatchMedia(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE)
+                        ? "Last action • Play / pause" : "Media action failed";
             case AppPrefs.GESTURE_ACTION_NEXT_TRACK:
-                dispatchMedia(KeyEvent.KEYCODE_MEDIA_NEXT);
-                return "Last action • Next track";
+                return dispatchMedia(KeyEvent.KEYCODE_MEDIA_NEXT)
+                        ? "Last action • Next track" : "Media action failed";
             case AppPrefs.GESTURE_ACTION_PREVIOUS_TRACK:
-                dispatchMedia(KeyEvent.KEYCODE_MEDIA_PREVIOUS);
-                return "Last action • Previous track";
+                return dispatchMedia(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
+                        ? "Last action • Previous track" : "Media action failed";
             case AppPrefs.GESTURE_ACTION_VOLUME_UP:
                 adjustVolume(1);
                 return "Last action • Volume up";
@@ -233,6 +233,10 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             case AppPrefs.GESTURE_ACTION_VOLUME_SLIDER:
                 if (sample != null) applyVolumeSlide(sample);
                 return "Last action • Volume slider";
+            case AppPrefs.GESTURE_ACTION_WAKE_AOD:
+                return setAodVisible(true);
+            case AppPrefs.GESTURE_ACTION_SLEEP_AOD:
+                return setAodVisible(false);
             default:
                 return null;
         }
@@ -257,13 +261,40 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
         } catch (Throwable ignored) {}
     }
 
-    private void dispatchMedia(int keyCode) {
-        if (audioManager == null) return;
+    private boolean dispatchMedia(int keyCode) {
+        // Shell input is much more reliable on the lock screen/AOD than a normal
+        // app-side media dispatch. Keep AudioManager as a fallback for OEMs that
+        // reject shell media keys.
+        IAodShellService shell = ShizukuBridge.getService();
+        if (shell != null) {
+            try {
+                String error = shell.dispatchMediaKey(keyCode);
+                if (error == null || error.isEmpty()) return true;
+            } catch (Throwable ignored) {}
+        }
+        if (audioManager == null) return false;
         long now = SystemClock.uptimeMillis();
         try {
             audioManager.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_DOWN, keyCode, 0));
             audioManager.dispatchMediaKeyEvent(new KeyEvent(now, now, KeyEvent.ACTION_UP, keyCode, 0));
-        } catch (Throwable ignored) {}
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private String setAodVisible(boolean visible) {
+        IAodShellService shell = ShizukuBridge.getService();
+        if (shell == null) return "AOD action needs Shizuku";
+        try {
+            // Wake/Sleep AOD means visible/blank native AOD; it does not wake the
+            // lock screen. 0 = clear scrim, 255 = fully black scrim.
+            String error = shell.setUniformDimming(visible ? 0 : 255, 0);
+            if (error != null && !error.isEmpty()) return "AOD action failed";
+            return visible ? "Last action • Wake AOD" : "Last action • Sleep AOD";
+        } catch (Throwable t) {
+            return "AOD action failed";
+        }
     }
 
     private String toggleTorch() {

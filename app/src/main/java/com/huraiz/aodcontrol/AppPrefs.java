@@ -25,6 +25,8 @@ public final class AppPrefs {
     public static final int GESTURE_ACTION_VOLUME_DOWN = 6;
     public static final int GESTURE_ACTION_WAKE_SCREEN = 7;
     public static final int GESTURE_ACTION_VOLUME_SLIDER = 8;
+    public static final int GESTURE_ACTION_WAKE_AOD = 9;
+    public static final int GESTURE_ACTION_SLEEP_AOD = 10;
 
     public static final String GESTURE_DOUBLE_TAP = "gesture_double_tap";
     public static final String GESTURE_TRIPLE_TAP = "gesture_triple_tap";
@@ -32,8 +34,12 @@ public final class AppPrefs {
     public static final String GESTURE_SWIPE_RIGHT_TO_LEFT = "gesture_swipe_right_to_left";
     public static final String GESTURE_SWIPE_UP = "gesture_swipe_up";
     public static final String GESTURE_SWIPE_DOWN = "gesture_swipe_down";
-    public static final String GESTURE_LEFT_EDGE_SLIDE = "gesture_left_edge_slide";
-    public static final String GESTURE_RIGHT_EDGE_SLIDE = "gesture_right_edge_slide";
+    public static final String GESTURE_LEFT_EDGE_UP = "gesture_left_edge_up";
+    public static final String GESTURE_LEFT_EDGE_DOWN = "gesture_left_edge_down";
+    public static final String GESTURE_RIGHT_EDGE_UP = "gesture_right_edge_up";
+    public static final String GESTURE_RIGHT_EDGE_DOWN = "gesture_right_edge_down";
+    private static final String LEGACY_GESTURE_LEFT_EDGE_SLIDE = "gesture_left_edge_slide";
+    private static final String LEGACY_GESTURE_RIGHT_EDGE_SLIDE = "gesture_right_edge_slide";
 
     public static final String MODE_NIGHT = "night";
     public static final String MODE_NAVIGATION = "navigation";
@@ -102,7 +108,18 @@ public final class AppPrefs {
 
     public static int getGestureAction(Context context, String gesture) {
         if (!isGestureKey(gesture)) return GESTURE_ACTION_NONE;
-        return sanitizeGestureAction(prefs(context).getInt(gesture + "_action", GESTURE_ACTION_NONE), isEdgeGesture(gesture));
+        SharedPreferences p = prefs(context);
+        String key = gesture + "_action";
+        if (!p.contains(key)) {
+            String legacy = legacyEdgeGestureFor(gesture);
+            if (legacy != null && p.contains(legacy + "_action")) {
+                int migrated = sanitizeGestureAction(
+                        p.getInt(legacy + "_action", GESTURE_ACTION_NONE), true);
+                p.edit().putInt(key, migrated).apply();
+                return migrated;
+            }
+        }
+        return sanitizeGestureAction(p.getInt(key, GESTURE_ACTION_NONE), isEdgeGesture(gesture));
     }
 
     public static void setGestureAction(Context context, String gesture, int action) {
@@ -122,12 +139,24 @@ public final class AppPrefs {
                 GESTURE_DOUBLE_TAP, GESTURE_TRIPLE_TAP,
                 GESTURE_SWIPE_LEFT_TO_RIGHT, GESTURE_SWIPE_RIGHT_TO_LEFT,
                 GESTURE_SWIPE_UP, GESTURE_SWIPE_DOWN,
-                GESTURE_LEFT_EDGE_SLIDE, GESTURE_RIGHT_EDGE_SLIDE
+                GESTURE_LEFT_EDGE_UP, GESTURE_LEFT_EDGE_DOWN,
+                GESTURE_RIGHT_EDGE_UP, GESTURE_RIGHT_EDGE_DOWN
         };
     }
 
     public static boolean isEdgeGesture(String gesture) {
-        return GESTURE_LEFT_EDGE_SLIDE.equals(gesture) || GESTURE_RIGHT_EDGE_SLIDE.equals(gesture);
+        return GESTURE_LEFT_EDGE_UP.equals(gesture) || GESTURE_LEFT_EDGE_DOWN.equals(gesture)
+                || GESTURE_RIGHT_EDGE_UP.equals(gesture) || GESTURE_RIGHT_EDGE_DOWN.equals(gesture);
+    }
+
+    private static String legacyEdgeGestureFor(String gesture) {
+        if (GESTURE_LEFT_EDGE_UP.equals(gesture) || GESTURE_LEFT_EDGE_DOWN.equals(gesture)) {
+            return LEGACY_GESTURE_LEFT_EDGE_SLIDE;
+        }
+        if (GESTURE_RIGHT_EDGE_UP.equals(gesture) || GESTURE_RIGHT_EDGE_DOWN.equals(gesture)) {
+            return LEGACY_GESTURE_RIGHT_EDGE_SLIDE;
+        }
+        return null;
     }
 
     public static String gestureActionLabel(int action) {
@@ -140,6 +169,8 @@ public final class AppPrefs {
             case GESTURE_ACTION_VOLUME_DOWN: return "Volume down";
             case GESTURE_ACTION_WAKE_SCREEN: return "Wake screen";
             case GESTURE_ACTION_VOLUME_SLIDER: return "Volume slider";
+            case GESTURE_ACTION_WAKE_AOD: return "Wake AOD";
+            case GESTURE_ACTION_SLEEP_AOD: return "Sleep AOD";
             default: return "No action";
         }
     }
@@ -153,6 +184,7 @@ public final class AppPrefs {
     private static int sanitizeGestureAction(int action, boolean edgeGesture) {
         if (action >= GESTURE_ACTION_TORCH && action <= GESTURE_ACTION_WAKE_SCREEN) return action;
         if (edgeGesture && action == GESTURE_ACTION_VOLUME_SLIDER) return action;
+        if (action == GESTURE_ACTION_WAKE_AOD || action == GESTURE_ACTION_SLEEP_AOD) return action;
         return GESTURE_ACTION_NONE;
     }
 

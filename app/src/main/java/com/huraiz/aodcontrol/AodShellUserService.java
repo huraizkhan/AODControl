@@ -151,6 +151,13 @@ public class AodShellUserService extends IAodShellService.Stub {
     }
 
     @Override
+    public String dispatchMediaKey(int keyCode) {
+        // Keep the Shizuku bridge restricted to the media keys AODControl exposes.
+        if (keyCode != 85 && keyCode != 87 && keyCode != 88) return "Unsupported media key";
+        return errorFrom(run("/system/bin/input", "keyevent", Integer.toString(keyCode)));
+    }
+
+    @Override
     public void destroy() {
         synchronized (touchLock) { stopTouchMonitorLocked(); }
         System.exit(0);
