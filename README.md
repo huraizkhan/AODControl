@@ -130,3 +130,7 @@ AOD gestures can now be limited to AOD only, the visible lock screen only, or bo
 - New installs follow the system light/dark appearance by default.
 - Optional AOD gesture keep-alive periodically reopens the Shizuku touch monitor while AOD is active to reduce low-power touchscreen timeouts. This may increase battery usage while AOD is active.
 - Pocket protection is enabled by default and ignores gestures while Android reports the proximity/pocket state as covered.
+
+
+## v1.4.7 corrective gesture rollback
+Restores the exact v1.4.5 Shizuku touch engine after the v1.4.6 keep-alive/pocket changes caused gesture input to stop. New installs still follow the system light/dark theme by default. Keep-alive and pocket protection are temporarily removed until they can be reintroduced without changing the proven gesture transport. The Shizuku UserService version is bumped so the corrected daemon is recreated on update.

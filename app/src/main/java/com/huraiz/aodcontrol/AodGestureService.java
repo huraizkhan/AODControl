@@ -44,7 +44,6 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
 
     private volatile int pendingTapCount;
     private long lastTapAt;
-    private long lastKeepAliveAt;
     private TouchSample lastTap;
 
     private final Runnable finalizeTapSequence = () -> {
@@ -150,12 +149,6 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             }
 
             boolean interactiveAtStart = isScreenInteractive();
-            if (AppPrefs.isGestureKeepAliveEnabled(this) && gestureScopeIncludesAod()
-                    && !interactiveAtStart
-                    && SystemClock.elapsedRealtime() - lastKeepAliveAt >= 7500L) {
-                lastKeepAliveAt = SystemClock.elapsedRealtime();
-                try { shell.nudgeTouchInput(); } catch (Throwable ignored) {}
-            }
             boolean lockedAtStart = isKeyguardLocked();
             String payload;
             try {
@@ -180,9 +173,6 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             boolean lockedNow = isKeyguardLocked();
             if (!gestureScopeAllows(interactiveAtStart, lockedAtStart, interactiveNow, lockedNow)
                     && pendingTapCount == 0) continue;
-            if (AppPrefs.isPocketProtectionEnabled(this)) {
-                try { if (shell.isPocketCovered()) continue; } catch (Throwable ignored) {}
-            }
 
             int activeHeight = AppPrefs.getGestureActiveHeightPercent(this);
             if (!sample.startsInsideActiveHeight(activeHeight)) continue;
@@ -391,12 +381,6 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
     private boolean isKeyguardLocked() {
         KeyguardManager km = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         return km != null && km.isKeyguardLocked();
-    }
-
-    private boolean gestureScopeIncludesAod() {
-        int scope = AppPrefs.getGestureScope(this);
-        return scope == AppPrefs.GESTURE_SCOPE_AOD_ONLY
-                || scope == AppPrefs.GESTURE_SCOPE_AOD_AND_LOCK_SCREEN;
     }
 
     private boolean gestureScopeAllows(boolean interactiveAtStart, boolean lockedAtStart,

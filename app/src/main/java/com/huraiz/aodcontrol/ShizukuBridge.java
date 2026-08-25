@@ -19,7 +19,7 @@ public final class ShizukuBridge {
     }
 
     public static final int REQUEST_CODE = 4017;
-    private static final int USER_SERVICE_VERSION = 5;
+    private static final int USER_SERVICE_VERSION = 6;
 
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
     private static final CopyOnWriteArrayList<Listener> LISTENERS = new CopyOnWriteArrayList<>();

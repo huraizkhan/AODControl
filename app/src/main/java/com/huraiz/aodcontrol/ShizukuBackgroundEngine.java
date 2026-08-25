@@ -44,8 +44,6 @@ public final class ShizukuBackgroundEngine {
                     AppPrefs.getGestureActiveHeightPercent(context),
                     AppPrefs.getGestureEdgeWidthPercent(context),
                     AppPrefs.getGestureSensitivityPercent(context),
-                    AppPrefs.isGestureKeepAliveEnabled(context),
-                    AppPrefs.isPocketProtectionEnabled(context),
                     actions);
 
             Set<String> nav = AppPrefs.getNavigationPackages(context);

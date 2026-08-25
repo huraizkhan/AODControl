@@ -13,7 +13,7 @@ interface IAodShellService {
     String wakeScreen() = 10;
     String dispatchMediaKey(int keyCode) = 11;
     String refreshNativeAod() = 12;
-    String configureGestureEngine(boolean enabled, int scope, int activeHeight, int edgeWidth, int sensitivity, boolean keepAlive, boolean pocketProtection, in int[] actions) = 13;
+    String configureGestureEngine(boolean enabled, int scope, int activeHeight, int edgeWidth, int sensitivity, in int[] actions) = 13;
     String configureAutomationEngine(boolean enabled,
             int defaultBehavior, int defaultOpacity,
             boolean chargingEnabled, int chargingBehavior, int chargingOpacity,
@@ -22,8 +22,6 @@ interface IAodShellService {
             boolean nightEnabled, int nightBehavior, int nightOpacity, int nightStart, int nightEnd) = 14;
     String getBackgroundEngineStatus() = 15;
     String stopBackgroundEngine() = 16;
-    String nudgeTouchInput() = 17;
-    boolean isPocketCovered() = 18;
 
     void destroy() = 16777114;
 }

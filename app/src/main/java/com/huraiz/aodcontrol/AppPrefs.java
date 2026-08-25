@@ -67,8 +67,6 @@ public final class AppPrefs {
     private static final String KEY_GESTURE_SENSITIVITY = "gesture_sensitivity_percent";
     private static final String KEY_GESTURE_SCOPE = "gesture_scope";
     private static final String KEY_FOREGROUND_FALLBACK = "foreground_fallback";
-    private static final String KEY_GESTURE_KEEP_ALIVE = "gesture_keep_alive";
-    private static final String KEY_POCKET_PROTECTION = "gesture_pocket_protection";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -168,22 +166,6 @@ public final class AppPrefs {
 
     public static void setForegroundFallbackEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_FOREGROUND_FALLBACK, enabled).apply();
-    }
-
-    public static boolean isGestureKeepAliveEnabled(Context context) {
-        return prefs(context).getBoolean(KEY_GESTURE_KEEP_ALIVE, false);
-    }
-
-    public static void setGestureKeepAliveEnabled(Context context, boolean enabled) {
-        prefs(context).edit().putBoolean(KEY_GESTURE_KEEP_ALIVE, enabled).apply();
-    }
-
-    public static boolean isPocketProtectionEnabled(Context context) {
-        return prefs(context).getBoolean(KEY_POCKET_PROTECTION, true);
-    }
-
-    public static void setPocketProtectionEnabled(Context context, boolean enabled) {
-        prefs(context).edit().putBoolean(KEY_POCKET_PROTECTION, enabled).apply();
     }
 
     public static int getGestureAction(Context context, String gesture) {
