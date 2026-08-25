@@ -17,6 +17,7 @@ import android.view.WindowInsets;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -38,6 +39,10 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     private Switch enabledSwitch;
     private TextView serviceStatus;
     private TextView inputStatus;
+    private TextView edgeWidthValue;
+    private TextView activeHeightValue;
+    private TextView sensitivityValue;
+    private GestureZonePreviewView gesturePreview;
     private final Map<String, TextView> actionLabels = new LinkedHashMap<>();
 
     private final Runnable statusTicker = new Runnable() {
@@ -132,11 +137,34 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         root.addView(section("▣  Gesture zones"));
         LinearLayout previewCard = card();
         root.addView(previewCard, matchWrap());
-        GestureZonePreviewView preview = new GestureZonePreviewView(this);
+        gesturePreview = new GestureZonePreviewView(this);
         LinearLayout.LayoutParams previewLp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, dp(360));
         previewLp.setMargins(dp(8), dp(8), dp(8), dp(8));
-        previewCard.addView(preview, previewLp);
+        previewCard.addView(gesturePreview, previewLp);
+        addDivider(previewCard);
+        activeHeightValue = addSliderRow(previewCard, "Active gesture height",
+                "Centered vertical area where gestures may start.",
+                40, 100, AppPrefs.getGestureActiveHeightPercent(this), value -> {
+                    AppPrefs.setGestureActiveHeightPercent(this, value);
+                    if (activeHeightValue != null) activeHeightValue.setText(value + "%");
+                    if (gesturePreview != null) gesturePreview.invalidate();
+                });
+        addDivider(previewCard);
+        edgeWidthValue = addSliderRow(previewCard, "Edge width",
+                "Width of the left/right edge slide zones.",
+                8, 35, AppPrefs.getGestureEdgeWidthPercent(this), value -> {
+                    AppPrefs.setGestureEdgeWidthPercent(this, value);
+                    if (edgeWidthValue != null) edgeWidthValue.setText(value + "%");
+                    if (gesturePreview != null) gesturePreview.invalidate();
+                });
+        addDivider(previewCard);
+        sensitivityValue = addSliderRow(previewCard, "Gesture sensitivity",
+                "Higher values accept shorter and less perfectly straight swipes.",
+                1, 100, AppPrefs.getGestureSensitivityPercent(this), value -> {
+                    AppPrefs.setGestureSensitivityPercent(this, value);
+                    if (sensitivityValue != null) sensitivityValue.setText(value + "%");
+                });
 
         addGap(root, 22);
         root.addView(section("↕  Gestures"));
@@ -155,13 +183,13 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         addDivider(gestureCard);
         addGestureRow(gestureCard, AppPrefs.GESTURE_SWIPE_DOWN, "Swipe down", "Vertical swipe downward", false);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_UP, "Left edge ↑", "Slide upward in the outer-left 20%", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_UP, "Left edge ↑", "Slide upward in the configured left-edge zone", true);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_DOWN, "Left edge ↓", "Slide downward in the outer-left 20%", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_LEFT_EDGE_DOWN, "Left edge ↓", "Slide downward in the configured left-edge zone", true);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_UP, "Right edge ↑", "Slide upward in the outer-right 20%", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_UP, "Right edge ↑", "Slide upward in the configured right-edge zone", true);
         addDivider(gestureCard);
-        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_DOWN, "Right edge ↓", "Slide downward in the outer-right 20%", true);
+        addGestureRow(gestureCard, AppPrefs.GESTURE_RIGHT_EDGE_DOWN, "Right edge ↓", "Slide downward in the configured right-edge zone", true);
 
         addGap(root, 22);
         root.addView(section("◇  Touch compatibility"));
@@ -239,11 +267,12 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
                 .setSingleChoiceItems(labels, checked, (dialog, which) -> {
                     int action = ids[which];
                     AppPrefs.setGestureAction(this, gesture, action);
-                    TextView label = actionLabels.get(gesture);
-                    if (label != null) label.setText(AppPrefs.gestureActionLabel(action));
                     if (action == AppPrefs.GESTURE_ACTION_TORCH) requestCameraPermissionIfNeeded();
+                    if (action == AppPrefs.GESTURE_ACTION_VOLUME_SLIDER) {
+                        toast("Volume slider uses both directions on this edge");
+                    }
                     AodGestureService.sync(this);
-                    refreshStatus();
+                    refreshAll();
                     dialog.dismiss();
                 })
                 .setNegativeButton("Cancel", null)
@@ -274,6 +303,10 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
         for (Map.Entry<String, TextView> entry : actionLabels.entrySet()) {
             entry.getValue().setText(AppPrefs.gestureActionLabel(AppPrefs.getGestureAction(this, entry.getKey())));
         }
+        if (activeHeightValue != null) activeHeightValue.setText(AppPrefs.getGestureActiveHeightPercent(this) + "%");
+        if (edgeWidthValue != null) edgeWidthValue.setText(AppPrefs.getGestureEdgeWidthPercent(this) + "%");
+        if (sensitivityValue != null) sensitivityValue.setText(AppPrefs.getGestureSensitivityPercent(this) + "%");
+        if (gesturePreview != null) gesturePreview.invalidate();
         refreshStatus();
     }
 
@@ -300,6 +333,45 @@ public final class GestureSettingsActivity extends Activity implements ShizukuBr
     }
 
     private interface ToggleListener { void onChanged(boolean checked); }
+    private interface SliderListener { void onChanged(int value); }
+
+    private TextView addSliderRow(LinearLayout parent, String title, String subtitle,
+                                  int min, int max, int current, SliderListener listener) {
+        LinearLayout host = vertical();
+        host.setPadding(dp(18), dp(13), dp(18), dp(12));
+
+        LinearLayout heading = new LinearLayout(this);
+        heading.setOrientation(LinearLayout.HORIZONTAL);
+        heading.setGravity(Gravity.CENTER_VERTICAL);
+        TextView titleView = text(title, 15, colors.text, false);
+        heading.addView(titleView, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        TextView valueView = text(current + "%", 13, colors.accent, true);
+        valueView.setGravity(Gravity.END);
+        heading.addView(valueView, new LinearLayout.LayoutParams(dp(64), LinearLayout.LayoutParams.WRAP_CONTENT));
+        host.addView(heading, matchWrap());
+
+        TextView sub = text(subtitle, 11, colors.muted, false);
+        sub.setPadding(0, dp(3), 0, dp(4));
+        host.addView(sub, matchWrap());
+
+        SeekBar seek = new SeekBar(this);
+        seek.setMax(max - min);
+        seek.setProgress(Math.max(0, Math.min(max - min, current - min)));
+        seek.setProgressTintList(ColorStateList.valueOf(colors.accent));
+        seek.setThumbTintList(ColorStateList.valueOf(colors.accent));
+        seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                int value = min + progress;
+                valueView.setText(value + "%");
+                if (fromUser) listener.onChanged(value);
+            }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+            @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+        });
+        host.addView(seek, matchWrap());
+        parent.addView(host, matchWrap());
+        return valueView;
+    }
 
     private void addSwitchRow(LinearLayout parent, String title, String subtitle,
                               boolean checked, ToggleListener listener) {

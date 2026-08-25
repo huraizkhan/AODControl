@@ -6,7 +6,7 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 import android.view.View;
 
-/** Simple visual map of the touch regions used by native-AOD gestures. */
+/** Visual map of the touch regions currently used by native-AOD gestures. */
 public final class GestureZonePreviewView extends View {
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -40,31 +40,46 @@ public final class GestureZonePreviewView extends View {
         canvas.drawRoundRect(phone, radius, radius, fill);
         canvas.drawRoundRect(phone, radius, radius, stroke);
 
-        float edge = phone.width() * 0.20f;
-        fill.setColor(UiTheme.withAlpha(colors.accent, colors.dark ? 38 : 26));
-        canvas.drawRoundRect(new RectF(phone.left, phone.top, phone.left + edge, phone.bottom), radius, radius, fill);
-        canvas.drawRoundRect(new RectF(phone.right - edge, phone.top, phone.right, phone.bottom), radius, radius, fill);
+        int activeHeightPct = AppPrefs.getGestureActiveHeightPercent(getContext());
+        float inactivePart = (100f - activeHeightPct) / 200f;
+        RectF active = new RectF(phone.left,
+                phone.top + phone.height() * inactivePart,
+                phone.right,
+                phone.bottom - phone.height() * inactivePart);
+
+        // Dim the parts outside the configured active start area.
+        fill.setColor(UiTheme.withAlpha(colors.muted, colors.dark ? 42 : 28));
+        if (active.top > phone.top) {
+            canvas.drawRect(phone.left, phone.top, phone.right, active.top, fill);
+            canvas.drawRect(phone.left, active.bottom, phone.right, phone.bottom, fill);
+        }
+
+        float edgeFraction = AppPrefs.getGestureEdgeWidthPercent(getContext()) / 100f;
+        float edge = phone.width() * edgeFraction;
+        fill.setColor(UiTheme.withAlpha(colors.accent, colors.dark ? 42 : 30));
+        canvas.drawRect(active.left, active.top, active.left + edge, active.bottom, fill);
+        canvas.drawRect(active.right - edge, active.top, active.right, active.bottom, fill);
 
         text.setColor(colors.accent);
         text.setTextSize(dp(16));
-        canvas.drawText("↑", phone.left + edge / 2f, phone.centerY() - dp(22), text);
-        canvas.drawText("↓", phone.left + edge / 2f, phone.centerY() + dp(38), text);
-        canvas.drawText("↑", phone.right - edge / 2f, phone.centerY() - dp(22), text);
-        canvas.drawText("↓", phone.right - edge / 2f, phone.centerY() + dp(38), text);
+        canvas.drawText("↑", phone.left + edge / 2f, active.centerY() - dp(22), text);
+        canvas.drawText("↓", phone.left + edge / 2f, active.centerY() + dp(38), text);
+        canvas.drawText("↑", phone.right - edge / 2f, active.centerY() - dp(22), text);
+        canvas.drawText("↓", phone.right - edge / 2f, active.centerY() + dp(38), text);
 
-        text.setTextSize(dp(11));
-        canvas.drawText("LEFT EDGE", phone.left + edge / 2f, phone.top + dp(30), text);
-        canvas.drawText("RIGHT EDGE", phone.right - edge / 2f, phone.top + dp(30), text);
+        text.setTextSize(dp(10));
+        canvas.drawText("LEFT", phone.left + edge / 2f, active.top + dp(24), text);
+        canvas.drawText("RIGHT", phone.right - edge / 2f, active.top + dp(24), text);
 
         text.setColor(colors.text);
         text.setTextSize(dp(18));
-        canvas.drawText("←   SWIPE   →", phone.centerX(), phone.centerY() - dp(26), text);
-        canvas.drawText("↑     ↓", phone.centerX(), phone.centerY() + dp(18), text);
+        canvas.drawText("←   SWIPE   →", active.centerX(), active.centerY() - dp(26), text);
+        canvas.drawText("↑     ↓", active.centerX(), active.centerY() + dp(18), text);
 
         text.setColor(colors.muted);
-        text.setTextSize(dp(12));
-        canvas.drawText("Double / triple tap anywhere", phone.centerX(), phone.bottom - dp(42), text);
-        canvas.drawText("Edge zone = outer 20%", phone.centerX(), phone.bottom - dp(20), text);
+        text.setTextSize(dp(11));
+        canvas.drawText("Tap / swipe start area: " + activeHeightPct + "%", phone.centerX(), phone.bottom - dp(38), text);
+        canvas.drawText("Edge width: " + AppPrefs.getGestureEdgeWidthPercent(getContext()) + "%", phone.centerX(), phone.bottom - dp(18), text);
     }
 
     private float dp(float value) {

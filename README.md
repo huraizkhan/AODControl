@@ -103,3 +103,10 @@ app/build/outputs/apk/debug/app-debug.apk
 - Makes horizontal swipe detection more forgiving.
 - Sends play/pause/next/previous media keys through the restricted Shizuku shell path first, with AudioManager fallback.
 - Adds Wake AOD and Sleep AOD actions. These change the native AOD scrim between visible and fully black without intentionally waking the lock screen.
+
+## v1.4.2 gesture and live-AOD refresh
+
+- Gesture active height, edge width and sensitivity are configurable, and the preview follows the selected zones.
+- Assigning Volume slider to one edge direction reserves both directions on that physical edge.
+- Wake AOD / Sleep AOD now refresh the native doze session after changing the scrim, without intentionally waking the full lock screen.
+- Automatic mode transitions, especially charger connect/disconnect, are re-evaluated immediately and refresh an already-running native AOD so the new opacity becomes visible promptly.

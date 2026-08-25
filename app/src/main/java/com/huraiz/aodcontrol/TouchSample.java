@@ -35,10 +35,19 @@ final class TouchSample {
         }
     }
 
-    boolean isTap() {
-        return durationMs <= 450L
-                && Math.abs(endX - startX) <= maxX * 0.07f
-                && Math.abs(endY - startY) <= maxY * 0.07f;
+    boolean startsInsideActiveHeight(int activeHeightPercent) {
+        int pct = clamp(activeHeightPercent, 40, 100);
+        float margin = maxY * ((100f - pct) / 200f);
+        return startY >= margin && startY <= (maxY - margin);
+    }
+
+    boolean isTap(int sensitivityPercent) {
+        float s = clamp(sensitivityPercent, 1, 100) / 100f;
+        float movement = 0.04f + 0.043f * s;
+        long maxDuration = Math.round(350f + 143f * s);
+        return durationMs <= maxDuration
+                && Math.abs(endX - startX) <= maxX * movement
+                && Math.abs(endY - startY) <= maxY * movement;
     }
 
     boolean closeTo(TouchSample other) {
@@ -47,30 +56,34 @@ final class TouchSample {
                 && Math.abs(endY - other.endY) <= maxY * 0.16f;
     }
 
-    String movementGesture() {
+    String movementGesture(int edgeWidthPercent, int sensitivityPercent) {
         float dx = endX - startX;
         float dy = endY - startY;
         float ax = Math.abs(dx);
         float ay = Math.abs(dy);
 
-        // Edge zones intentionally occupy 20% of either side so they are easy to
-        // hit on dim native-AOD screens. Direction is part of the gesture key.
-        boolean edgeVertical = ay >= maxY * 0.08f && ay > ax * 1.15f;
-        if (edgeVertical && startX <= maxX * 0.20f) {
+        float s = clamp(sensitivityPercent, 1, 100) / 100f;
+        float edgeFraction = clamp(edgeWidthPercent, 8, 35) / 100f;
+
+        // Higher sensitivity accepts shorter and less perfectly straight swipes.
+        // At the default 70%, these thresholds match v1.4.1 closely.
+        float edgeThreshold = 0.15f - (0.10f * s);
+        float normalThreshold = 0.26f - (0.20f * s);
+        float dominance = 1.45f - (0.50f * s);
+
+        boolean edgeVertical = ay >= maxY * edgeThreshold && ay > ax * dominance;
+        if (edgeVertical && startX <= maxX * edgeFraction) {
             return dy < 0 ? AppPrefs.GESTURE_LEFT_EDGE_UP : AppPrefs.GESTURE_LEFT_EDGE_DOWN;
         }
-        if (edgeVertical && startX >= maxX * 0.80f) {
+        if (edgeVertical && startX >= maxX * (1f - edgeFraction)) {
             return dy < 0 ? AppPrefs.GESTURE_RIGHT_EDGE_UP : AppPrefs.GESTURE_RIGHT_EDGE_DOWN;
         }
 
-        // Horizontal swipes are deliberately more forgiving than v1.4.0. This
-        // helps track-change gestures register even when the finger path is not
-        // perfectly straight on AOD.
-        if (ax >= maxX * 0.12f && ax > ay * 1.10f) {
+        if (ax >= maxX * normalThreshold && ax > ay * dominance) {
             return dx > 0 ? AppPrefs.GESTURE_SWIPE_LEFT_TO_RIGHT
                     : AppPrefs.GESTURE_SWIPE_RIGHT_TO_LEFT;
         }
-        if (ay >= maxY * 0.12f && ay > ax * 1.10f) {
+        if (ay >= maxY * normalThreshold && ay > ax * dominance) {
             return dy < 0 ? AppPrefs.GESTURE_SWIPE_UP : AppPrefs.GESTURE_SWIPE_DOWN;
         }
         return null;
@@ -78,5 +91,9 @@ final class TouchSample {
 
     float verticalFractionUp() {
         return (startY - endY) / (float) maxY;
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return Math.max(min, Math.min(max, value));
     }
 }

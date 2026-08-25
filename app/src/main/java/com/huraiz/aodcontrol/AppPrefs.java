@@ -57,6 +57,9 @@ public final class AppPrefs {
     private static final String KEY_DYNAMIC_COLOR = "dynamic_color";
     private static final String KEY_PURE_BLACK = "pure_black_theme";
     private static final String KEY_GESTURES_ENABLED = "aod_gestures_enabled";
+    private static final String KEY_GESTURE_EDGE_WIDTH = "gesture_edge_width_percent";
+    private static final String KEY_GESTURE_ACTIVE_HEIGHT = "gesture_active_height_percent";
+    private static final String KEY_GESTURE_SENSITIVITY = "gesture_sensitivity_percent";
 
     private static final String KEY_ORIGINAL_CAPTURED = "original_captured";
     private static final String KEY_ORIGINAL_DOZE = "original_doze";
@@ -106,6 +109,31 @@ public final class AppPrefs {
         prefs(context).edit().putBoolean(KEY_GESTURES_ENABLED, enabled).apply();
     }
 
+    public static int getGestureEdgeWidthPercent(Context context) {
+        return clamp(prefs(context).getInt(KEY_GESTURE_EDGE_WIDTH, 20), 8, 35);
+    }
+
+    public static void setGestureEdgeWidthPercent(Context context, int value) {
+        prefs(context).edit().putInt(KEY_GESTURE_EDGE_WIDTH, clamp(value, 8, 35)).apply();
+    }
+
+    public static int getGestureActiveHeightPercent(Context context) {
+        return clamp(prefs(context).getInt(KEY_GESTURE_ACTIVE_HEIGHT, 100), 40, 100);
+    }
+
+    public static void setGestureActiveHeightPercent(Context context, int value) {
+        prefs(context).edit().putInt(KEY_GESTURE_ACTIVE_HEIGHT, clamp(value, 40, 100)).apply();
+    }
+
+    public static int getGestureSensitivityPercent(Context context) {
+        // 70 preserves the forgiving thresholds used in v1.4.1.
+        return clamp(prefs(context).getInt(KEY_GESTURE_SENSITIVITY, 70), 1, 100);
+    }
+
+    public static void setGestureSensitivityPercent(Context context, int value) {
+        prefs(context).edit().putInt(KEY_GESTURE_SENSITIVITY, clamp(value, 1, 100)).apply();
+    }
+
     public static int getGestureAction(Context context, String gesture) {
         if (!isGestureKey(gesture)) return GESTURE_ACTION_NONE;
         SharedPreferences p = prefs(context);
@@ -119,12 +147,42 @@ public final class AppPrefs {
                 return migrated;
             }
         }
-        return sanitizeGestureAction(p.getInt(key, GESTURE_ACTION_NONE), isEdgeGesture(gesture));
+        int action = sanitizeGestureAction(p.getInt(key, GESTURE_ACTION_NONE), isEdgeGesture(gesture));
+        if (action == GESTURE_ACTION_VOLUME_SLIDER && isEdgeGesture(gesture)) {
+            String mate = pairedEdgeGesture(gesture);
+            if (mate != null && p.getInt(mate + "_action", GESTURE_ACTION_NONE) != GESTURE_ACTION_VOLUME_SLIDER) {
+                p.edit().putInt(mate + "_action", GESTURE_ACTION_VOLUME_SLIDER).apply();
+            }
+        }
+        return action;
     }
 
     public static void setGestureAction(Context context, String gesture, int action) {
         if (!isGestureKey(gesture)) return;
-        prefs(context).edit().putInt(gesture + "_action", sanitizeGestureAction(action, isEdgeGesture(gesture))).apply();
+        boolean edge = isEdgeGesture(gesture);
+        int sanitized = sanitizeGestureAction(action, edge);
+        SharedPreferences.Editor edit = prefs(context).edit();
+
+        // A volume slider owns the complete physical edge. The direction of the
+        // finger itself controls volume, so exposing separate up/down actions on
+        // that same edge would be confusing and could cause double assignment.
+        if (edge && sanitized == GESTURE_ACTION_VOLUME_SLIDER) {
+            String mate = pairedEdgeGesture(gesture);
+            edit.putInt(gesture + "_action", GESTURE_ACTION_VOLUME_SLIDER);
+            if (mate != null) edit.putInt(mate + "_action", GESTURE_ACTION_VOLUME_SLIDER);
+            edit.apply();
+            return;
+        }
+
+        // Replacing one half of an existing slider releases the other half.
+        if (edge) {
+            String mate = pairedEdgeGesture(gesture);
+            if (mate != null
+                    && prefs(context).getInt(mate + "_action", GESTURE_ACTION_NONE) == GESTURE_ACTION_VOLUME_SLIDER) {
+                edit.putInt(mate + "_action", GESTURE_ACTION_NONE);
+            }
+        }
+        edit.putInt(gesture + "_action", sanitized).apply();
     }
 
     public static boolean anyGestureActionConfigured(Context context) {
@@ -147,6 +205,14 @@ public final class AppPrefs {
     public static boolean isEdgeGesture(String gesture) {
         return GESTURE_LEFT_EDGE_UP.equals(gesture) || GESTURE_LEFT_EDGE_DOWN.equals(gesture)
                 || GESTURE_RIGHT_EDGE_UP.equals(gesture) || GESTURE_RIGHT_EDGE_DOWN.equals(gesture);
+    }
+
+    private static String pairedEdgeGesture(String gesture) {
+        if (GESTURE_LEFT_EDGE_UP.equals(gesture)) return GESTURE_LEFT_EDGE_DOWN;
+        if (GESTURE_LEFT_EDGE_DOWN.equals(gesture)) return GESTURE_LEFT_EDGE_UP;
+        if (GESTURE_RIGHT_EDGE_UP.equals(gesture)) return GESTURE_RIGHT_EDGE_DOWN;
+        if (GESTURE_RIGHT_EDGE_DOWN.equals(gesture)) return GESTURE_RIGHT_EDGE_UP;
+        return null;
     }
 
     private static String legacyEdgeGestureFor(String gesture) {

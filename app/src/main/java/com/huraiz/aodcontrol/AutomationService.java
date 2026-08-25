@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.os.PowerManager;
 
 import java.util.Calendar;
 import java.util.Set;
@@ -29,12 +30,14 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private volatile boolean evaluating;
+    private volatile boolean reevaluateRequested;
+    private volatile boolean forceNextApply;
     private volatile String lastAppliedKey = "";
     private volatile boolean lastApplyOk;
 
     private final Runnable tick = new Runnable() {
         @Override public void run() {
-            evaluateAndApply();
+            requestEvaluation(false);
             long next = AppPrefs.isModeEnabled(AutomationService.this, AppPrefs.MODE_NAVIGATION)
                     ? 4000L : 30000L;
             main.postDelayed(this, next);
@@ -43,8 +46,10 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
 
     private final BroadcastReceiver stateReceiver = new BroadcastReceiver() {
         @Override public void onReceive(Context context, Intent intent) {
-            lastAppliedKey = "";
-            evaluateAndApply();
+            // Power broadcasts must be handled immediately. Do not clear the old
+            // key here: keeping it lets us detect the actual mode transition and
+            // refresh the already-running native AOD only when state changed.
+            requestEvaluation(false);
         }
     };
 
@@ -81,8 +86,7 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
             return START_NOT_STICKY;
         }
         if (intent != null && ACTION_REFRESH.equals(intent.getAction())) {
-            lastAppliedKey = "";
-            evaluateAndApply();
+            requestEvaluation(true);
         }
         return START_STICKY;
     }
@@ -102,41 +106,87 @@ public class AutomationService extends Service implements ShizukuBridge.Listener
     @Override
     public void onShizukuStateChanged() {
         if (ShizukuBridge.isReady()) {
-            lastAppliedKey = "";
-            evaluateAndApply();
+            requestEvaluation(true);
         } else {
             updateNotification("Waiting for Shizuku");
         }
     }
 
-    private void evaluateAndApply() {
+    private synchronized void requestEvaluation(boolean forceApply) {
         if (!AppPrefs.anyAutomationEnabled(this)) {
             stopSelf();
             return;
         }
-        if (evaluating) return;
+        if (forceApply) forceNextApply = true;
+        if (evaluating) {
+            reevaluateRequested = true;
+            return;
+        }
+
         evaluating = true;
-        io.execute(() -> {
-            try {
-                EffectiveState state = resolveState();
-                String key = state.reason + "|" + state.behavior.type + "|" + state.behavior.opacity;
-                if (!key.equals(lastAppliedKey) || !lastApplyOk) {
-                    if (!ShizukuBridge.isReady()) {
-                        lastApplyOk = false;
-                        AppPrefs.saveLastState(this, state.reason, state.behavior, false);
-                        updateNotification("Waiting for Shizuku");
-                    } else {
-                        AodApplier.Result result = AodApplier.apply(this, state.behavior);
-                        lastApplyOk = result.ok;
-                        if (result.ok) lastAppliedKey = key;
-                        AppPrefs.saveLastState(this, state.reason, state.behavior, result.ok);
-                        updateNotification(state.reason + " • " + AppPrefs.describeBehavior(state.behavior));
+        final boolean forceThisPass = forceNextApply;
+        forceNextApply = false;
+        io.execute(() -> evaluateAndApplyNow(forceThisPass));
+    }
+
+    private void evaluateAndApplyNow(boolean forceApply) {
+        try {
+            EffectiveState state = resolveState();
+            String key = state.reason + "|" + state.behavior.type + "|" + state.behavior.opacity;
+            boolean changed = !key.equals(lastAppliedKey);
+            if (forceApply || changed || !lastApplyOk) {
+                if (!ShizukuBridge.isReady()) {
+                    lastApplyOk = false;
+                    AppPrefs.saveLastState(this, state.reason, state.behavior, false);
+                    updateNotification("Waiting for Shizuku");
+                } else {
+                    AodApplier.Result result = AodApplier.apply(this, state.behavior);
+                    lastApplyOk = result.ok;
+                    if (result.ok) {
+                        lastAppliedKey = key;
+                        // A Pixel/SystemUI doze session may keep the old scrim even
+                        // after settings changed. Refresh it after any real automatic
+                        // transition (especially charger connect/disconnect).
+                        if (changed || forceApply) refreshNativeAodWhenAmbient();
                     }
+                    AppPrefs.saveLastState(this, state.reason, state.behavior, result.ok);
+                    updateNotification(state.reason + " • " + AppPrefs.describeBehavior(state.behavior));
                 }
-            } finally {
-                evaluating = false;
             }
-        });
+        } finally {
+            boolean again;
+            synchronized (this) {
+                evaluating = false;
+                again = reevaluateRequested || forceNextApply;
+                reevaluateRequested = false;
+            }
+            if (again) main.post(() -> requestEvaluation(false));
+        }
+    }
+
+    private void refreshNativeAodWhenAmbient() {
+        IAodShellService shell = ShizukuBridge.getService();
+        if (shell == null) return;
+
+        // Plugging a charger can briefly make the display interactive. Wait for
+        // that pulse to settle, then restart only the native doze session. This
+        // avoids a full KEYCODE_WAKEUP/lock-screen flash.
+        for (int attempt = 0; attempt < 5; attempt++) {
+            if (!isScreenInteractive()) {
+                try { shell.refreshNativeAod(); } catch (Throwable ignored) {}
+                return;
+            }
+            try { Thread.sleep(attempt == 0 ? 180L : 350L); }
+            catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private boolean isScreenInteractive() {
+        PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+        return pm != null && pm.isInteractive();
     }
 
     private EffectiveState resolveState() {

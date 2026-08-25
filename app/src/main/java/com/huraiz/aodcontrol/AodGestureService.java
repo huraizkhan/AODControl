@@ -169,10 +169,15 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
             if (sample == null) continue;
             boolean sequenceStartedOnAod = ambientAtStart || !isScreenInteractive() || pendingTapCount > 0;
             if (!sequenceStartedOnAod) continue;
-            if (sample.isTap()) {
+
+            int activeHeight = AppPrefs.getGestureActiveHeightPercent(this);
+            if (!sample.startsInsideActiveHeight(activeHeight)) continue;
+            int sensitivity = AppPrefs.getGestureSensitivityPercent(this);
+            if (sample.isTap(sensitivity)) {
                 main.post(() -> onTap(sample));
             } else {
-                String gesture = sample.movementGesture();
+                int edgeWidth = AppPrefs.getGestureEdgeWidthPercent(this);
+                String gesture = sample.movementGesture(edgeWidth, sensitivity);
                 if (gesture != null) main.post(() -> executeGesture(gesture, sample));
             }
         }
@@ -288,9 +293,12 @@ public final class AodGestureService extends Service implements ShizukuBridge.Li
         if (shell == null) return "AOD action needs Shizuku";
         try {
             // Wake/Sleep AOD means visible/blank native AOD; it does not wake the
-            // lock screen. 0 = clear scrim, 255 = fully black scrim.
+            // lock screen. Update the scrim, then restart only the native doze
+            // session so SystemUI actually re-reads the new opacity immediately.
             String error = shell.setUniformDimming(visible ? 0 : 255, 0);
             if (error != null && !error.isEmpty()) return "AOD action failed";
+            error = shell.refreshNativeAod();
+            if (error != null && !error.isEmpty()) return "AOD refresh failed • " + error;
             return visible ? "Last action • Wake AOD" : "Last action • Sleep AOD";
         } catch (Throwable t) {
             return "AOD action failed";

@@ -12,6 +12,7 @@ interface IAodShellService {
     String waitForTouchEvent(int timeoutMs) = 9;
     String wakeScreen() = 10;
     String dispatchMediaKey(int keyCode) = 11;
+    String refreshNativeAod() = 12;
 
     void destroy() = 16777114;
 }

@@ -158,6 +158,29 @@ public class AodShellUserService extends IAodShellService.Stub {
     }
 
     @Override
+    public String refreshNativeAod() {
+        // Pixel/SystemUI reads the dimming scrim when a fresh doze session starts.
+        // Changing always_on_display_constants alone may not redraw an already
+        // active AOFP session, so briefly cycle the native AOD setting without
+        // issuing KEYCODE_WAKEUP (which would show the full lock screen).
+        String current = getSetting("secure", AodSettings.DOZE_ALWAYS_ON);
+        if (!"1".equals(current)) return "Native AOD is disabled";
+
+        String error = putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "0");
+        if (error != null && !error.isEmpty()) return error;
+        try { Thread.sleep(140L); } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        error = putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+        if (error != null && !error.isEmpty()) {
+            // Best effort restore if the second write failed.
+            putSetting("secure", AodSettings.DOZE_ALWAYS_ON, "1");
+            return error;
+        }
+        return "";
+    }
+
+    @Override
     public void destroy() {
         synchronized (touchLock) { stopTouchMonitorLocked(); }
         System.exit(0);
